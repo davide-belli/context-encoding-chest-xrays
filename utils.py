@@ -3,8 +3,14 @@ from PIL import Image
 from torch.autograd import Variable
 
 
-def load_image(filename, size=None, scale=None):
-    img = Image.open(filename)
+def load_image(filename, size=None, scale=None, greyscale=False):
+    
+    if greyscale:
+        tmpimg = Image.open(filename)
+        img = Image.new("RGB", tmpimg.size)
+        img.paste(tmpimg)
+    else:
+        img = Image.open(filename)
     if size is not None:
         img = img.resize((size, size), Image.ANTIALIAS)
     elif scale is not None:
