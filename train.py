@@ -17,7 +17,7 @@ from model import _netlocalD, _netG
 import utils
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--dataset', default='tiny-imagenet', help='cifar10 | lsun | imagenet | folder | lfw ')
+parser.add_argument('--dataset', default='tiny-imagenet', help='streetview | tiny-imagenet | lungs ')
 parser.add_argument('--dataroot', default='dataset/train', help='path to dataset')
 parser.add_argument('--workers', type=int, help='number of data loading workers', default=2)
 parser.add_argument('--batchSize', type=int, default=64, help='input batch size')
@@ -45,6 +45,7 @@ parser.add_argument('--wtlD', type=float, default=0.001, help='0 means do not us
 
 opt = parser.parse_args()
 opt.cuda = True
+opt.dataset = "lungs"
 print(opt)
 
 try:
@@ -68,15 +69,15 @@ cudnn.benchmark = True
 if torch.cuda.is_available() and not opt.cuda:
     print("WARNING: You have a CUDA device, so you should probably run with --cuda")
 
-if opt.dataset in ['imagenet', 'folder', 'lfw']:
-    # folder dataset
-    dataset = dset.ImageFolder(root=opt.dataroot,
-                               transform=transforms.Compose([
-                                   transforms.Scale(opt.imageSize),
-                                   transforms.CenterCrop(opt.imageSize),
-                                   transforms.ToTensor(),
-                                   transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
-                               ]))
+# if opt.dataset in ['imagenet', 'folder', 'lfw']:
+#     # folder dataset
+#     dataset = dset.ImageFolder(root=opt.dataroot,
+#                                transform=transforms.Compose([
+#                                    transforms.Scale(opt.imageSize),
+#                                    transforms.CenterCrop(opt.imageSize),
+#                                    transforms.ToTensor(),
+#                                    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+#                                ]))
 if opt.dataset == 'tiny-imagenet':
     # folder dataset
     dataset = dset.ImageFolder(root='dataset_tiny_imagenet/train',
@@ -86,22 +87,31 @@ if opt.dataset == 'tiny-imagenet':
                                    transforms.ToTensor(),
                                    # transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
                                ]))
-elif opt.dataset == 'lsun':
-    dataset = dset.LSUN(db_path=opt.dataroot, classes=['bedroom_train'],
-                        transform=transforms.Compose([
-                            transforms.Scale(opt.imageSize),
-                            transforms.CenterCrop(opt.imageSize),
-                            transforms.ToTensor(),
-                            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
-                        ]))
-elif opt.dataset == 'cifar10':
-    dataset = dset.CIFAR10(root=opt.dataroot, download=True,
-                           transform=transforms.Compose([
-                               transforms.Scale(opt.imageSize),
-                               transforms.ToTensor(),
-                               transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
-                           ])
-                           )
+elif opt.dataset == 'lungs':
+    # folder dataset
+    dataset = dset.ImageFolder(root='dataset_lungs',
+                               transform=transforms.Compose([
+                                   transforms.Scale(opt.imageSize),
+                                   transforms.CenterCrop(opt.imageSize),
+                                   transforms.ToTensor(),
+                                   # transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+                               ]))
+# elif opt.dataset == 'lsun':
+#     dataset = dset.LSUN(db_path=opt.dataroot, classes=['bedroom_train'],
+#                         transform=transforms.Compose([
+#                             transforms.Scale(opt.imageSize),
+#                             transforms.CenterCrop(opt.imageSize),
+#                             transforms.ToTensor(),
+#                             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+#                         ]))
+# elif opt.dataset == 'cifar10':
+#     dataset = dset.CIFAR10(root=opt.dataroot, download=True,
+#                            transform=transforms.Compose([
+#                                transforms.Scale(opt.imageSize),
+#                                transforms.ToTensor(),
+#                                transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+#                            ])
+#                            )
 elif opt.dataset == 'streetview':
     transform = transforms.Compose([transforms.Scale(opt.imageSize),
                                     transforms.CenterCrop(opt.imageSize),
@@ -256,14 +266,14 @@ for epoch in range(resume_epoch, opt.niter):
                  errD.data[0], errG_D.data[0], errG_l2.data[0], D_x, D_G_z1,))
         if i % 100 == 0:
             vutils.save_image(real_cpu,
-                              'result/train/real/real_samples_epoch_%03d.png' % (epoch))
+                              'result/' + str(opt.dataset) + '/real/real_samples_epoch_%03d.png' % (epoch))
             vutils.save_image(input_cropped.data,
-                              'result/train/cropped/cropped_samples_epoch_%03d.png' % (epoch))
+                              'result/' + str(opt.dataset) + '/cropped/cropped_samples_epoch_%03d.png' % (epoch))
             recon_image = input_cropped.clone()
             recon_image.data[:, :, int(opt.imageSize / 4):int(opt.imageSize / 4 + opt.imageSize / 2),
             int(opt.imageSize / 4):int(opt.imageSize / 4 + opt.imageSize / 2)] = fake.data
             vutils.save_image(recon_image.data,
-                              'result/train/recon/recon_center_samples_epoch_%03d.png' % (epoch))
+                              'result/' + str(opt.dataset) + '/recon/recon_center_samples_epoch_%03d.png' % (epoch))
     
     # do checkpointing
     torch.save({'epoch': epoch + 1,
