@@ -17,7 +17,7 @@ from model import _netlocalD, _netG
 import utils
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--dataset', default='tiny-imagenet', help='cifar10 | lsun | imagenet | folder | lfw ')
+parser.add_argument('--dataset', default='streetview', help='cifar10 | lsun | imagenet | folder | lfw ')
 parser.add_argument('--dataroot', default='dataset/train', help='path to dataset')
 parser.add_argument('--workers', type=int, help='number of data loading workers', default=2)
 parser.add_argument('--batchSize', type=int, default=64, help='input batch size')
@@ -44,7 +44,6 @@ parser.add_argument('--wtl2', type=float, default=0.998, help='0 means do not us
 parser.add_argument('--wtlD', type=float, default=0.001, help='0 means do not use else use with this weight')
 
 opt = parser.parse_args()
-opt.cuda = True
 print(opt)
 
 try:
@@ -56,7 +55,7 @@ except OSError:
     pass
 
 if opt.manualSeed is None:
-    opt.manualSeed = 1234  # random.randint(1, 10000)
+    opt.manualSeed = random.randint(1, 10000)
 print("Random Seed: ", opt.manualSeed)
 random.seed(opt.manualSeed)
 torch.manual_seed(opt.manualSeed)
@@ -76,15 +75,6 @@ if opt.dataset in ['imagenet', 'folder', 'lfw']:
                                    transforms.CenterCrop(opt.imageSize),
                                    transforms.ToTensor(),
                                    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
-                               ]))
-if opt.dataset == 'tiny-imagenet':
-    # folder dataset
-    dataset = dset.ImageFolder(root='dataset_tiny_imagenet/train',
-                               transform=transforms.Compose([
-                                   transforms.Scale(opt.imageSize),
-                                   transforms.CenterCrop(opt.imageSize),
-                                   transforms.ToTensor(),
-                                   # transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
                                ]))
 elif opt.dataset == 'lsun':
     dataset = dset.LSUN(db_path=opt.dataroot, classes=['bedroom_train'],
@@ -106,7 +96,8 @@ elif opt.dataset == 'streetview':
     transform = transforms.Compose([transforms.Scale(opt.imageSize),
                                     transforms.CenterCrop(opt.imageSize),
                                     transforms.ToTensor(),
-                                    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+                                    # transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+                                    ])
     dataset = dset.ImageFolder(root=opt.dataroot, transform=transform)
 assert dataset
 dataloader = torch.utils.data.DataLoader(dataset, batch_size=opt.batchSize,
@@ -203,10 +194,12 @@ for epoch in range(resume_epoch, opt.niter):
         # train with real
         netD.zero_grad()
         label.data.resize_(batch_size).fill_(real_label)
-        
-        # input("Proceed..." + str(real_center.data.size()))
-        
+        # print(real_center.data.size())
         output = netD(real_center)
+        
+        # print(output.data.size(), " ", label.data.size())
+        # input("")
+        
         errD_real = criterion(output, label)
         errD_real.backward()
         D_x = output.data.mean()
@@ -217,8 +210,6 @@ for epoch in range(resume_epoch, opt.niter):
         fake = netG(input_cropped)
         label.data.fill_(fake_label)
         output = netD(fake.detach())
-        # print(output.data.size(), " ", label.data.size())
-        # input("")
         errD_fake = criterion(output, label)
         errD_fake.backward()
         D_G_z1 = output.data.mean()

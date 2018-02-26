@@ -1,4 +1,11 @@
-model/
-.idea/
-.ipynb_checkpoints/
-__pycache__/
+# ----------------- Directories -----------------
+
+*/
+!model/
+
+
+
+
+# -------------------- Files --------------------
+
+old*.py
