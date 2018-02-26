@@ -45,13 +45,18 @@ parser.add_argument('--wtlD', type=float, default=0.001, help='0 means do not us
 
 opt = parser.parse_args()
 opt.cuda = True
-opt.dataset = "lungs"
+
+# opt.netG = 'model/netG_streetview.pth'
+# opt.netD = 'model/netlocalD.pth'
+# opt.dataroot = 'dataset/test'
+
+# opt.dataset = "lungs"
 print(opt)
 
 try:
-    os.makedirs("result/train/cropped")
-    os.makedirs("result/train/real")
-    os.makedirs("result/train/recon")
+    os.makedirs('result/' + str(opt.dataset) + '/cropped')
+    os.makedirs('result/' + str(opt.dataset) + '/real')
+    os.makedirs('result/' + str(opt.dataset) + '/recon')
     os.makedirs("model")
 except OSError:
     pass
@@ -158,6 +163,8 @@ if opt.netD != '':
     netD.load_state_dict(torch.load(opt.netD, map_location=lambda storage, location: storage)['state_dict'])
     resume_epoch = torch.load(opt.netD)['epoch']
 print(netD)
+
+# resume_epoch = 0
 
 criterion = nn.BCELoss()
 criterionMSE = nn.MSELoss()
@@ -273,7 +280,7 @@ for epoch in range(resume_epoch, opt.niter):
             recon_image.data[:, :, int(opt.imageSize / 4):int(opt.imageSize / 4 + opt.imageSize / 2),
             int(opt.imageSize / 4):int(opt.imageSize / 4 + opt.imageSize / 2)] = fake.data
             vutils.save_image(recon_image.data,
-                              'result/' + str(opt.dataset) + '/recon/recon_center_samples_epoch_%03d.png' % (epoch))
+                              'result/' + str(opt.dataset) + '/recon/recon_center_samples__epoch_%03d.png' % (epoch))
     
     # do checkpointing
     torch.save({'epoch': epoch + 1,
