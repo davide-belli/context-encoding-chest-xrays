@@ -17,8 +17,8 @@ from model import _netlocalD, _netG
 import utils
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--dataset', default='tiny-imagenet', help='streetview | tiny-imagenet | lungs ')
-parser.add_argument('--dataroot', default='dataset_tiny_imagenet/test', help='path to dataset')
+parser.add_argument('--dataset', default='lungs', help='streetview | tiny-imagenet | lungs ')
+parser.add_argument('--dataroot', default='', help='path to dataset')
 parser.add_argument('--workers', type=int, help='number of data loading workers', default=2)
 parser.add_argument('--batchSize', type=int, default=64, help='input batch size')
 parser.add_argument('--imageSize', type=int, default=128, help='the height / width of the input image to network')
@@ -47,8 +47,8 @@ opt = parser.parse_args()
 opt.cuda = True
 
 opt.niter = 1
-opt.netG = 'model/netG_streetview.pth'
-opt.netD = 'model/netlocalD.pth'
+opt.netG = 'model/' + opt.dataset + '/netG_streetview.pth'
+opt.netD = 'model/' + opt.dataset + '/netlocalD.pth'
 
 # opt.dataset = "lungs"
 print(opt)
@@ -82,7 +82,7 @@ if torch.cuda.is_available() and not opt.cuda:
 #                                ]))
 if opt.dataset == 'tiny-imagenet':
     # folder dataset
-    dataset = dset.ImageFolder(root='dataset_tiny_imagenet/train',
+    dataset = dset.ImageFolder(root='dataset_tiny_imagenet/test',
                                transform=transforms.Compose([
                                    transforms.Scale(opt.imageSize),
                                    transforms.CenterCrop(opt.imageSize),
@@ -103,7 +103,7 @@ elif opt.dataset == 'streetview':
                                     transforms.CenterCrop(opt.imageSize),
                                     transforms.ToTensor(),
                                     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
-    dataset = dset.ImageFolder(root=opt.dataroot, transform=transform)
+    dataset = dset.ImageFolder(root="dataset/val", transform=transform)
 assert dataset
 dataloader = torch.utils.data.DataLoader(dataset, batch_size=opt.batchSize,
                                          shuffle=True, num_workers=int(opt.workers))
