@@ -12,6 +12,9 @@ import torchvision.datasets as dset
 import torchvision.transforms as transforms
 import torchvision.utils as vutils
 from torch.autograd import Variable
+import pickle
+import matplotlib.pyplot as plt
+import math
 
 from model import _netlocalD, _netG
 import utils
@@ -114,6 +117,27 @@ nBottleneck = int(opt.nBottleneck)
 wtl2 = float(opt.wtl2)
 overlapL2Weight = 10
 
+# plot losses on a unique figure 'plot.png'
+def plotter(D_G_zs, D_xs, Advs):
+    x = list(range(len(Advs)))
+    log_4 = [-math.log(4)] * len(Advs)
+    
+    plt.clf()
+    plt.plot(x, D_G_zs, "g-", linewidth=0.5, label="D(G(z)) loss")
+    plt.plot(x, D_xs, "r-", linewidth=0.5, label="D(x) loss")
+    plt.plot(x, Advs, "b-", linewidth=0.5, label="Adv loss")
+    plt.plot(x, log_4, "k--", linewidth=0.5, label="-log(4)")
+    lgd = plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+    plt.savefig("plot.png", bbox_extra_artists=(lgd,), bbox_inches='tight')
+
+    plt.clf()
+    plt.plot(x, D_G_zs, "g-", linewidth=0.5, label="D(G(z)) loss")
+    plt.plot(x, D_xs, "r-", linewidth=0.5, label="D(x) loss")
+    lgd = plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+    plt.savefig("plot_p.png", bbox_extra_artists=(lgd,), bbox_inches='tight')
+    
+    return
+
 
 # custom weights initialization called on netG and netD
 def weights_init(m):
@@ -172,8 +196,22 @@ real_center = Variable(real_center)
 optimizerD = optim.Adam(netD.parameters(), lr=opt.lr, betas=(opt.beta1, 0.999))
 optimizerG = optim.Adam(netG.parameters(), lr=opt.lr, betas=(opt.beta1, 0.999))
 
+# store information about losses for plotting
+STEPS_TO_REPORT = 5
+step_counter = 0
+D_G_zs = []
+D_xs = []
+Advs = []
+this_DGz = 0
+this_Dx = 0
+this_Adv = 0
+
+
 for epoch in range(resume_epoch, opt.niter):
+    
     for i, data in enumerate(dataloader, 0):
+        step_counter += 1
+        
         real_cpu, _ = data
         real_center_cpu = real_cpu[:, :, int(opt.imageSize / 4):int(opt.imageSize / 4) + int(opt.imageSize / 2),
                           int(opt.imageSize / 4):int(opt.imageSize / 4) + int(opt.imageSize / 2)]
@@ -244,10 +282,38 @@ for epoch in range(resume_epoch, opt.niter):
         
         D_G_z2 = output.data.mean()
         optimizerG.step()
-        
-        print('[%d/%d][%d/%d] Loss_D: %.4f Loss_G: %.4f / %.4f l_D(x): %.4f l_D(G(z)): %.4f'
+
+        print('[%d/%d][%d/%d] Loss_D: %.4f | Loss_G: %.4f / %.4f -> %.4f | l_D(x): %.4f | l_D(G(z)): %.4f'
               % (epoch, opt.niter, i, len(dataloader),
-                 errD.data[0], errG_D.data[0], errG_l2.data[0], D_x, D_G_z1,))
+                 errD.data[0], errG_D.data[0], errG_l2.data[0], errG.data[0], D_x, D_G_z1))
+        
+        this_DGz += D_G_z1
+        this_Dx += D_x
+        this_Adv += errG_D.data[0]
+        
+        if step_counter == STEPS_TO_REPORT:
+            this_DGz /= STEPS_TO_REPORT
+            this_Dx /= STEPS_TO_REPORT
+            this_Adv /= STEPS_TO_REPORT
+            
+            D_G_zs.append(this_DGz)
+            D_xs.append(this_Dx)
+            Advs.append(this_Adv)
+
+            print("\tAVG MEASURE STEP | l_D(x): %.4f | l_D(G(z)): %.4f | l_Adv: %.4f " % (this_Dx, this_DGz, this_Adv))
+            
+            # Store measure lists in file
+            t = (D_G_zs, D_xs, Advs)
+            pickle.dump(t, open("measures.pickle", "wb"))
+            
+            plotter(D_G_zs, D_xs, Advs)
+            
+            this_DGz = 0
+            this_Dx = 0
+            this_Adv = 0
+            step_counter = 0
+            
+        
         if i % 100 == 0:
             vutils.save_image(real_cpu,
                               'result/' + str(opt.dataset) + '/real/real_samples_epoch_%03d.png' % (epoch))
