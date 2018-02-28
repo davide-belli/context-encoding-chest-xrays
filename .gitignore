@@ -8,3 +8,5 @@
 
 old*.py
 lungs.*
+plot*
+*.pickle

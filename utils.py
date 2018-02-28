@@ -4,7 +4,6 @@ from torch.autograd import Variable
 
 
 def load_image(filename, size=None, scale=None, greyscale=False):
-    
     if greyscale:
         tmpimg = Image.open(filename)
         img = Image.new("RGB", tmpimg.size)
@@ -46,5 +45,5 @@ def normalize_batch(batch):
     batch = torch.div(batch, 255.0)
     batch -= Variable(mean)
     # batch /= Variable(std)
-    batch = torch.div(batch,Variable(std))
+    batch = torch.div(batch, Variable(std))
     return batch
