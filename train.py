@@ -49,11 +49,6 @@ parser.add_argument('--wtlD', type=float, default=0.001, help='0 means do not us
 opt = parser.parse_args()
 opt.cuda = True
 
-# opt.netG = 'model/netG_streetview.pth'
-# opt.netD = 'model/netlocalD.pth'
-# opt.dataroot = 'dataset/test'
-
-# opt.dataset = "lungs"
 print(opt)
 
 try:
@@ -197,7 +192,7 @@ optimizerD = optim.Adam(netD.parameters(), lr=opt.lr, betas=(opt.beta1, 0.999))
 optimizerG = optim.Adam(netG.parameters(), lr=opt.lr, betas=(opt.beta1, 0.999))
 
 # store information about losses for plotting
-STEPS_TO_REPORT = 5
+STEPS_TO_REPORT = 200
 step_counter = 0
 D_G_zs = []
 D_xs = []

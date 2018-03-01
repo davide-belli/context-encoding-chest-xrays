@@ -47,8 +47,11 @@ opt = parser.parse_args()
 opt.cuda = True
 
 opt.niter = 1
-opt.netG = 'model/' + opt.dataset + '/netG_streetview.pth'
-opt.netD = 'model/' + opt.dataset + '/netlocalD.pth'
+opt.netG = 'model/netG_streetview.pth'
+opt.netD = 'model/netlocalD.pth'
+
+# opt.netG = 'model/' + opt.dataset + '/netG_streetview.pth'
+# opt.netD = 'model/' + opt.dataset + '/netlocalD.pth'
 
 # opt.dataset = "lungs"
 print(opt)
