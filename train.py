@@ -49,6 +49,9 @@ parser.add_argument('--wtlD', type=float, default=0.001, help='0 means do not us
 opt = parser.parse_args()
 opt.cuda = True
 
+opt.netD = "model/netlocalD.pth"
+opt.netG = "model/netG_streetview.pth"
+
 print(opt)
 
 try:
@@ -149,6 +152,7 @@ resume_epoch = 0
 netG = _netG(opt)
 netG.apply(weights_init)
 if opt.netG != '':
+    print("Loading model netG from: ", opt.netG)
     netG.load_state_dict(torch.load(opt.netG, map_location=lambda storage, location: storage)['state_dict'])
     resume_epoch = torch.load(opt.netG)['epoch']
 print(netG)
@@ -156,6 +160,7 @@ print(netG)
 netD = _netlocalD(opt)
 netD.apply(weights_init)
 if opt.netD != '':
+    print("Loading model netD from: ", opt.netD)
     netD.load_state_dict(torch.load(opt.netD, map_location=lambda storage, location: storage)['state_dict'])
     resume_epoch = torch.load(opt.netD)['epoch']
 print(netD)
@@ -197,6 +202,12 @@ step_counter = 0
 D_G_zs = []
 D_xs = []
 Advs = []
+
+# Load measures from initial part of the training, if loading an existing model
+if opt.netG != '':
+    (D_G_zs, D_xs, Advs) = pickle.load(open("measures.pickle", "rb"))
+    print("Loaded saved measures with ", len(D_G_zs), "datapoints, approximately ", len(D_G_zs)*STEPS_TO_REPORT/len(dataloader), "epochs")
+    
 this_DGz = 0
 this_Dx = 0
 this_Adv = 0
