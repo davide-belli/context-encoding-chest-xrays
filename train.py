@@ -30,7 +30,7 @@ parser.add_argument('--nz', type=int, default=100, help='size of the latent z ve
 parser.add_argument('--ngf', type=int, default=64)
 parser.add_argument('--ndf', type=int, default=64)
 parser.add_argument('--nc', type=int, default=3)
-parser.add_argument('--niter', type=int, default=25, help='number of epochs to train for')
+parser.add_argument('--niter', type=int, default=50, help='number of epochs to train for')
 parser.add_argument('--lr', type=float, default=0.0002, help='learning rate, default=0.0002')
 parser.add_argument('--beta1', type=float, default=0.5, help='beta1 for adam. default=0.5')
 parser.add_argument('--cuda', action='store_true', help='enables cuda')
@@ -49,8 +49,8 @@ parser.add_argument('--wtlD', type=float, default=0.001, help='0 means do not us
 opt = parser.parse_args()
 opt.cuda = True
 
-opt.netD = "model/netlocalD.pth"
-opt.netG = "model/netG_streetview.pth"
+# opt.netD = "model/netlocalD.pth"
+# opt.netG = "model/netG_streetview.pth"
 
 print(opt)
 
@@ -59,6 +59,7 @@ try:
     os.makedirs('result/' + str(opt.dataset) + '/real')
     os.makedirs('result/' + str(opt.dataset) + '/recon')
     os.makedirs("model")
+    os.makedirs("plots")
 except OSError:
     pass
 
@@ -74,7 +75,6 @@ cudnn.benchmark = True
 
 if torch.cuda.is_available() and not opt.cuda:
     print("WARNING: You have a CUDA device, so you should probably run with --cuda")
-
 
 if opt.dataset == 'tiny-imagenet':
     # folder dataset
@@ -100,7 +100,7 @@ elif opt.dataset == 'streetview':
                                     transforms.ToTensor(),
                                     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
     dataset = dset.ImageFolder(root="dataset/train", transform=transform)
-    
+
 assert dataset
 dataloader = torch.utils.data.DataLoader(dataset, batch_size=opt.batchSize,
                                          shuffle=True, num_workers=int(opt.workers))
@@ -115,8 +115,9 @@ nBottleneck = int(opt.nBottleneck)
 wtl2 = float(opt.wtl2)
 overlapL2Weight = 10
 
+
 # plot losses on a unique figure 'plot.png'
-def plotter(D_G_zs, D_xs, Advs):
+def plotter(D_G_zs, D_xs, Advs, L2s, G_tots, D_tots):
     x = list(range(len(Advs)))
     log_4 = [-math.log(4)] * len(Advs)
     
@@ -126,13 +127,25 @@ def plotter(D_G_zs, D_xs, Advs):
     plt.plot(x, Advs, "b-", linewidth=0.5, label="Adv loss")
     plt.plot(x, log_4, "k--", linewidth=0.5, label="-log(4)")
     lgd = plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
-    plt.savefig("plot.png", bbox_extra_artists=(lgd,), bbox_inches='tight')
-
+    plt.savefig("plots/main4.png", bbox_extra_artists=(lgd,), bbox_inches='tight')
+    
     plt.clf()
     plt.plot(x, D_G_zs, "g-", linewidth=0.5, label="D(G(z)) loss")
     plt.plot(x, D_xs, "r-", linewidth=0.5, label="D(x) loss")
     lgd = plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
-    plt.savefig("plot_p.png", bbox_extra_artists=(lgd,), bbox_inches='tight')
+    plt.savefig("plots/fake-real_probs.png", bbox_extra_artists=(lgd,), bbox_inches='tight')
+    
+    plt.clf()
+    plt.plot(x, Advs, "b-", linewidth=0.5, label="Adversarial loss")
+    plt.plot(x, L2s, "g-", linewidth=0.5, label="L2 loss")
+    plt.plot(x, G_tots, "k-", linewidth=0.5, label="Tot Generator loss")
+    lgd = plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+    plt.savefig("plots/gen_losses.png", bbox_extra_artists=(lgd,), bbox_inches='tight')
+    
+    plt.clf()
+    plt.plot(x, D_tots, "b-", linewidth=0.5, label="Tot Discriminator loss")
+    lgd = plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+    plt.savefig("plots/disc_losses.png", bbox_extra_artists=(lgd,), bbox_inches='tight')
     
     return
 
@@ -202,16 +215,22 @@ step_counter = 0
 D_G_zs = []
 D_xs = []
 Advs = []
+L2s = []
+D_tots = []
+G_tots = []
 
 # Load measures from initial part of the training, if loading an existing model
 if opt.netG != '':
     (D_G_zs, D_xs, Advs) = pickle.load(open("measures.pickle", "rb"))
-    print("Loaded saved measures with ", len(D_G_zs), "datapoints, approximately ", len(D_G_zs)*STEPS_TO_REPORT/len(dataloader), "epochs")
-    
+    print("Loaded saved measures with ", len(D_G_zs), "datapoints, approximately ",
+          len(D_G_zs) * STEPS_TO_REPORT / len(dataloader), "epochs")
+
 this_DGz = 0
 this_Dx = 0
 this_Adv = 0
-
+this_L2 = 0
+this_G_tot = 0
+this_D_tot = 0
 
 for epoch in range(resume_epoch, opt.niter):
     
@@ -288,37 +307,51 @@ for epoch in range(resume_epoch, opt.niter):
         
         D_G_z2 = output.data.mean()
         optimizerG.step()
-
-        print('[%d/%d][%d/%d] Loss_D: %.4f | Loss_G: %.4f / %.4f -> %.4f | l_D(x): %.4f | l_D(G(z)): %.4f'
+        
+        print('[%d/%d][%d/%d] Loss_D: %.4f | Loss_G (Adv/L2->Tot): %.4f / %.4f -> %.4f | p_D(x): %.4f | p_D(G(z)): %.4f'
               % (epoch, opt.niter, i, len(dataloader),
-                 errD.data[0], errG_D.data[0], errG_l2.data[0], errG.data[0], D_x, D_G_z1))
+                 errD.data[0], errG_D.data[0] * (1 - wtl2), errG_l2.data[0] * wtl2, errG.data[0], D_x, D_G_z1))
         
         this_DGz += D_G_z1
         this_Dx += D_x
         this_Adv += errG_D.data[0]
+        this_L2 += errG_l2.data[0]
+        this_G_tot += errG.data[0]
+        this_D_tot += errD.data[0]
         
         if step_counter == STEPS_TO_REPORT:
+            this_Adv *= (1 - wtl2)
+            this_L2 *= wtl2
             this_DGz /= STEPS_TO_REPORT
             this_Dx /= STEPS_TO_REPORT
             this_Adv /= STEPS_TO_REPORT
+            this_L2 /= STEPS_TO_REPORT
+            this_G_tot /= STEPS_TO_REPORT
+            this_D_tot /= STEPS_TO_REPORT
             
             D_G_zs.append(this_DGz)
             D_xs.append(this_Dx)
             Advs.append(this_Adv)
-
-            print("\tAVG MEASURE STEP | l_D(x): %.4f | l_D(G(z)): %.4f | l_Adv: %.4f " % (this_Dx, this_DGz, this_Adv))
+            L2s.append(this_L2)
+            G_tots.append(this_G_tot)
+            D_tots.append(this_D_tot)
+            
+            print("\tAVG MEASURE STEP | l_D(x): %.4f | l_D(G(z)): %.4f | l_Adv: %.4f | l_L2: %.4f  | l_Gtot: %.4f  | "
+                  "l_Dtot: %.4f  " % (this_Dx, this_DGz, this_Adv, this_L2, this_G_tot, this_D_tot))
             
             # Store measure lists in file
-            t = (D_G_zs, D_xs, Advs)
+            t = (D_G_zs, D_xs, Advs, L2s, G_tots, D_tots)
             pickle.dump(t, open("measures.pickle", "wb"))
             
-            plotter(D_G_zs, D_xs, Advs)
+            plotter(D_G_zs, D_xs, Advs, L2s, G_tots, D_tots)
             
             this_DGz = 0
             this_Dx = 0
             this_Adv = 0
+            this_L2 = 0
+            this_G_tot = 0
+            this_D_tot = 0
             step_counter = 0
-            
         
         if i % 100 == 0:
             vutils.save_image(real_cpu,
