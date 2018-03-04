@@ -49,8 +49,8 @@ parser.add_argument('--wtlD', type=float, default=0.001, help='0 means do not us
 opt = parser.parse_args()
 opt.cuda = True
 
-# opt.netD = "model/netlocalD.pth"
-# opt.netG = "model/netG_streetview.pth"
+opt.netD = "model/netlocalD.pth"
+opt.netG = "model/netG_streetview.pth"
 
 print(opt)
 
@@ -119,12 +119,13 @@ overlapL2Weight = 10
 # plot losses on a unique figure 'plot.png'
 def plotter(D_G_zs, D_xs, Advs, L2s, G_tots, D_tots):
     x = list(range(len(Advs)))
+    Advs_gain = [-x / (1- opt.wtl2) for x in Advs] # Adversarial gain defined as unnormalized negative loss
     log_4 = [-math.log(4)] * len(Advs)
     
     plt.clf()
     plt.plot(x, D_G_zs, "g-", linewidth=0.5, label="D(G(z)) loss")
     plt.plot(x, D_xs, "r-", linewidth=0.5, label="D(x) loss")
-    plt.plot(x, Advs, "b-", linewidth=0.5, label="Adv loss")
+    plt.plot(x, Advs_gain, "b-", linewidth=0.5, label="Adv loss")
     plt.plot(x, log_4, "k--", linewidth=0.5, label="-log(4)")
     lgd = plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
     plt.savefig("plots/main4.png", bbox_extra_artists=(lgd,), bbox_inches='tight')
@@ -221,7 +222,7 @@ G_tots = []
 
 # Load measures from initial part of the training, if loading an existing model
 if opt.netG != '':
-    (D_G_zs, D_xs, Advs) = pickle.load(open("measures.pickle", "rb"))
+    (D_G_zs, D_xs, Advs, L2s, G_tots, D_tots) = pickle.load(open("measures.pickle", "rb"))
     print("Loaded saved measures with ", len(D_G_zs), "datapoints, approximately ",
           len(D_G_zs) * STEPS_TO_REPORT / len(dataloader), "epochs")
 
