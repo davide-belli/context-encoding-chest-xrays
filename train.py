@@ -49,8 +49,11 @@ parser.add_argument('--wtlD', type=float, default=0.001, help='0 means do not us
 opt = parser.parse_args()
 opt.cuda = True
 
-opt.netD = "model/netlocalD.pth"
-opt.netG = "model/netG_streetview.pth"
+opt.wtl2 = 0
+opt.ndf = 128
+opt.nc = 1 # Grayscale input and output
+# opt.netD = "model/netlocalD.pth"
+# opt.netG = "model/netG_streetview.pth"
 
 print(opt)
 
@@ -58,8 +61,8 @@ try:
     os.makedirs('result/' + str(opt.dataset) + '/cropped')
     os.makedirs('result/' + str(opt.dataset) + '/real')
     os.makedirs('result/' + str(opt.dataset) + '/recon')
-    os.makedirs("model")
     os.makedirs("plots")
+    os.makedirs("model")
 except OSError:
     pass
 
@@ -87,13 +90,20 @@ if opt.dataset == 'tiny-imagenet':
                                ]))
 elif opt.dataset == 'lungs':
     # folder dataset
-    dataset = dset.ImageFolder(root='dataset_lungs/train',
-                               transform=transforms.Compose([
-                                   transforms.Scale(opt.imageSize),
-                                   transforms.CenterCrop(opt.imageSize),
-                                   transforms.ToTensor(),
-                                   # transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
-                               ]))
+    if opt.nc == 1:
+        transform = transforms.Compose([
+            transforms.Grayscale(),
+            transforms.Scale(opt.imageSize),
+            transforms.CenterCrop(opt.imageSize),
+            transforms.ToTensor(),
+        ])
+    else:
+        transform = transforms.Compose([
+            transforms.Scale(opt.imageSize),
+            transforms.CenterCrop(opt.imageSize),
+            transforms.ToTensor(),
+        ])
+    dataset = dset.ImageFolder(root='dataset_lungs/train', transform=transform)
 elif opt.dataset == 'streetview':
     transform = transforms.Compose([transforms.Scale(opt.imageSize),
                                     transforms.CenterCrop(opt.imageSize),
@@ -249,14 +259,16 @@ for epoch in range(resume_epoch, opt.niter):
         int(opt.imageSize / 4 + opt.overlapPred):int(opt.imageSize / 4 + opt.imageSize / 2 - opt.overlapPred),
         int(opt.imageSize / 4 + opt.overlapPred):int(
             opt.imageSize / 4 + opt.imageSize / 2 - opt.overlapPred)] = 2 * 117.0 / 255.0 - 1.0
-        input_cropped.data[:, 1,
-        int(opt.imageSize / 4 + opt.overlapPred):int(opt.imageSize / 4 + opt.imageSize / 2 - opt.overlapPred),
-        int(opt.imageSize / 4 + opt.overlapPred):int(
-            opt.imageSize / 4 + opt.imageSize / 2 - opt.overlapPred)] = 2 * 104.0 / 255.0 - 1.0
-        input_cropped.data[:, 2,
-        int(opt.imageSize / 4 + opt.overlapPred):int(opt.imageSize / 4 + opt.imageSize / 2 - opt.overlapPred),
-        int(opt.imageSize / 4 + opt.overlapPred):int(
-            opt.imageSize / 4 + opt.imageSize / 2 - opt.overlapPred)] = 2 * 123.0 / 255.0 - 1.0
+        if opt.nc > 1:
+            input_cropped.data[:, 1,
+            int(opt.imageSize / 4 + opt.overlapPred):int(opt.imageSize / 4 + opt.imageSize / 2 - opt.overlapPred),
+            int(opt.imageSize / 4 + opt.overlapPred):int(
+                opt.imageSize / 4 + opt.imageSize / 2 - opt.overlapPred)] = 2 * 104.0 / 255.0 - 1.0
+            input_cropped.data[:, 2,
+            int(opt.imageSize / 4 + opt.overlapPred):int(opt.imageSize / 4 + opt.imageSize / 2 - opt.overlapPred),
+            int(opt.imageSize / 4 + opt.overlapPred):int(
+                opt.imageSize / 4 + opt.imageSize / 2 - opt.overlapPred)] = 2 * 123.0 / 255.0 - 1.0
+        
         
         # train with real
         netD.zero_grad()
