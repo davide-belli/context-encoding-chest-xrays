@@ -29,7 +29,7 @@ parser.add_argument('--imageSize', type=int, default=128, help='the height / wid
 parser.add_argument('--nz', type=int, default=100, help='size of the latent z vector')
 parser.add_argument('--ngf', type=int, default=64)
 parser.add_argument('--ndf', type=int, default=64)
-parser.add_argument('--nc', type=int, default=3)
+parser.add_argument('--nc', type=int, default=1)  # By default convert image input and output to grayscale
 parser.add_argument('--niter', type=int, default=50, help='number of epochs to train for')
 parser.add_argument('--lr', type=float, default=0.0002, help='learning rate, default=0.0002')
 parser.add_argument('--beta1', type=float, default=0.5, help='beta1 for adam. default=0.5')
@@ -51,26 +51,29 @@ opt.cuda = True
 
 opt.wtl2 = 0
 opt.ndf = 128
-opt.nc = 1 # Grayscale input and output
-# opt.netD = "model/netlocalD.pth"
-# opt.netG = "model/netG_streetview.pth"
+CONTINUE_TRAINING = False
+
+if CONTINUE_TRAINING:
+    print("Continuing with the training of an existing model")
+    opt.netD = "model/netlocalD.pth"
+    opt.netG = "model/netG_streetview.pth"
 
 print(opt)
 
 try:
+    os.makedirs("plots")
+    os.makedirs("model")
     os.makedirs('result/' + str(opt.dataset) + '/cropped')
     os.makedirs('result/' + str(opt.dataset) + '/real')
     os.makedirs('result/' + str(opt.dataset) + '/recon')
-    os.makedirs("plots")
-    os.makedirs("model")
 except OSError:
     pass
 
 if opt.manualSeed is None:
-    opt.manualSeed = 1234  # random.randint(1, 10000)
-print("Random Seed: ", opt.manualSeed)
+    opt.manualSeed = 1234
 random.seed(opt.manualSeed)
 torch.manual_seed(opt.manualSeed)
+
 if opt.cuda:
     torch.cuda.manual_seed_all(opt.manualSeed)
 
@@ -96,19 +99,22 @@ elif opt.dataset == 'lungs':
             transforms.Scale(opt.imageSize),
             transforms.CenterCrop(opt.imageSize),
             transforms.ToTensor(),
+            # transforms.Normalize([0.5], [0.5])
         ])
     else:
         transform = transforms.Compose([
             transforms.Scale(opt.imageSize),
             transforms.CenterCrop(opt.imageSize),
             transforms.ToTensor(),
+            # transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
         ])
     dataset = dset.ImageFolder(root='dataset_lungs/train', transform=transform)
 elif opt.dataset == 'streetview':
     transform = transforms.Compose([transforms.Scale(opt.imageSize),
                                     transforms.CenterCrop(opt.imageSize),
                                     transforms.ToTensor(),
-                                    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+                                    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+                                    ])
     dataset = dset.ImageFolder(root="dataset/train", transform=transform)
 
 assert dataset
@@ -128,21 +134,28 @@ overlapL2Weight = 10
 
 # plot losses on a unique figure 'plot.png'
 def plotter(D_G_zs, D_xs, Advs, L2s, G_tots, D_tots):
-    x = list(range(len(Advs)))
-    Advs_gain = [-x / (1- opt.wtl2) for x in Advs] # Adversarial gain defined as unnormalized negative loss
-    log_4 = [-math.log(4)] * len(Advs)
+    x = list(range(len(D_tots)))
+    log_4 = [-math.log(4)] * len(D_tots)
+    D_gain = [-k for k in D_tots]  # Discriminator gain defined as negative cross-entropy
     
+    vline_position = [len(dataloader) * x for x in range(int(math.floor(len(D_tots) / len(dataloader))))]
     plt.clf()
-    plt.plot(x, D_G_zs, "g-", linewidth=0.5, label="D(G(z)) loss")
-    plt.plot(x, D_xs, "r-", linewidth=0.5, label="D(x) loss")
-    plt.plot(x, Advs_gain, "b-", linewidth=0.5, label="Adv loss")
+    plt.plot(x, D_G_zs, "g-", linewidth=0.5, label="p D(G(z))")
+    plt.plot(x, D_xs, "r-", linewidth=0.5, label="p D(x)")
+    plt.plot(x, D_gain, "b-", linewidth=0.5, label="Disciminator")
     plt.plot(x, log_4, "k--", linewidth=0.5, label="-log(4)")
+    plt.xlabel('mini-batches of 64 images')
+    plt.ylabel('value')
+    for k in vline_position:
+        plt.axvline(x=k, linewidth=0.2, color='k', linestyle='--')
     lgd = plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
     plt.savefig("plots/main4.png", bbox_extra_artists=(lgd,), bbox_inches='tight')
     
     plt.clf()
-    plt.plot(x, D_G_zs, "g-", linewidth=0.5, label="D(G(z)) loss")
-    plt.plot(x, D_xs, "r-", linewidth=0.5, label="D(x) loss")
+    plt.plot(x, D_G_zs, "g-", linewidth=0.5, label="p D(G(z))")
+    plt.plot(x, D_xs, "r-", linewidth=0.5, label="p D(x)")
+    plt.xlabel('mini-batches of 64 images')
+    plt.ylabel('loss')
     lgd = plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
     plt.savefig("plots/fake-real_probs.png", bbox_extra_artists=(lgd,), bbox_inches='tight')
     
@@ -150,11 +163,15 @@ def plotter(D_G_zs, D_xs, Advs, L2s, G_tots, D_tots):
     plt.plot(x, Advs, "b-", linewidth=0.5, label="Adversarial loss")
     plt.plot(x, L2s, "g-", linewidth=0.5, label="L2 loss")
     plt.plot(x, G_tots, "k-", linewidth=0.5, label="Tot Generator loss")
+    plt.xlabel('mini-batches of 64 images')
+    plt.ylabel('loss')
     lgd = plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
     plt.savefig("plots/gen_losses.png", bbox_extra_artists=(lgd,), bbox_inches='tight')
     
     plt.clf()
     plt.plot(x, D_tots, "b-", linewidth=0.5, label="Tot Discriminator loss")
+    plt.xlabel('mini-batches of 64 images')
+    plt.ylabel('loss')
     lgd = plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
     plt.savefig("plots/disc_losses.png", bbox_extra_artists=(lgd,), bbox_inches='tight')
     
@@ -221,8 +238,10 @@ optimizerD = optim.Adam(netD.parameters(), lr=opt.lr, betas=(opt.beta1, 0.999))
 optimizerG = optim.Adam(netG.parameters(), lr=opt.lr, betas=(opt.beta1, 0.999))
 
 # store information about losses for plotting
-STEPS_TO_REPORT = 200
+STEPS_TO_PLOT = 100 # how often to update plots
+N_UPDATE_GEN = 2 # update generator every N discriminator updates
 step_counter = 0
+
 D_G_zs = []
 D_xs = []
 Advs = []
@@ -231,17 +250,10 @@ D_tots = []
 G_tots = []
 
 # Load measures from initial part of the training, if loading an existing model
-if opt.netG != '':
+if CONTINUE_TRAINING:
     (D_G_zs, D_xs, Advs, L2s, G_tots, D_tots) = pickle.load(open("measures.pickle", "rb"))
     print("Loaded saved measures with ", len(D_G_zs), "datapoints, approximately ",
-          len(D_G_zs) * STEPS_TO_REPORT / len(dataloader), "epochs")
-
-this_DGz = 0
-this_Dx = 0
-this_Adv = 0
-this_L2 = 0
-this_G_tot = 0
-this_D_tot = 0
+          math.ceil(len(D_G_zs) * STEPS_TO_PLOT / len(dataloader)), "epochs")
 
 for epoch in range(resume_epoch, opt.niter):
     
@@ -268,7 +280,6 @@ for epoch in range(resume_epoch, opt.niter):
             int(opt.imageSize / 4 + opt.overlapPred):int(opt.imageSize / 4 + opt.imageSize / 2 - opt.overlapPred),
             int(opt.imageSize / 4 + opt.overlapPred):int(
                 opt.imageSize / 4 + opt.imageSize / 2 - opt.overlapPred)] = 2 * 123.0 / 255.0 - 1.0
-        
         
         # train with real
         netD.zero_grad()
@@ -298,72 +309,43 @@ for epoch in range(resume_epoch, opt.niter):
         ############################
         # (2) Update G network: maximize log(D(G(z)))
         ###########################
-        netG.zero_grad()
-        label.data.fill_(real_label)  # fake labels are real for generator cost
-        output = netD(fake)
-        errG_D = criterion(output, label)
-        # errG_D.backward(retain_variables=True)
-        
-        # errG_l2 = criterionMSE(fake,real_center)
-        wtl2Matrix = real_center.clone()
-        wtl2Matrix.data.fill_(wtl2 * overlapL2Weight)
-        wtl2Matrix.data[:, :, int(opt.overlapPred):int(opt.imageSize / 2 - opt.overlapPred),
-        int(opt.overlapPred):int(opt.imageSize / 2 - opt.overlapPred)] = wtl2
-        
-        errG_l2 = (fake - real_center).pow(2)
-        errG_l2 = errG_l2 * wtl2Matrix
-        errG_l2 = errG_l2.mean()
-        
-        errG = (1 - wtl2) * errG_D + wtl2 * errG_l2
-        
-        errG.backward()
-        
-        D_G_z2 = output.data.mean()
-        optimizerG.step()
+        if i % N_UPDATE_GEN == 0:  # Step Generator every 10 Discriminator steps
+            netG.zero_grad()
+            label.data.fill_(real_label)  # fake labels are real for generator cost
+            output = netD(fake)
+            errG_D = criterion(output, label)
+            # errG_D.backward(retain_variables=True)
+            
+            # errG_l2 = criterionMSE(fake,real_center)
+            wtl2Matrix = real_center.clone()
+            wtl2Matrix.data.fill_(wtl2 * overlapL2Weight)
+            wtl2Matrix.data[:, :, int(opt.overlapPred):int(opt.imageSize / 2 - opt.overlapPred),
+            int(opt.overlapPred):int(opt.imageSize / 2 - opt.overlapPred)] = wtl2
+            
+            errG_l2 = (fake - real_center).pow(2)
+            errG_l2 = errG_l2 * wtl2Matrix
+            errG_l2 = errG_l2.mean()
+            
+            errG = (1 - wtl2) * errG_D + wtl2 * errG_l2
+            
+            errG.backward()
+            
+            D_G_z2 = output.data.mean()
+            optimizerG.step()
         
         print('[%d/%d][%d/%d] Loss_D: %.4f | Loss_G (Adv/L2->Tot): %.4f / %.4f -> %.4f | p_D(x): %.4f | p_D(G(z)): %.4f'
-              % (epoch, opt.niter, i, len(dataloader),
+              % (epoch, opt.niter, i+1, len(dataloader),
                  errD.data[0], errG_D.data[0] * (1 - wtl2), errG_l2.data[0] * wtl2, errG.data[0], D_x, D_G_z1))
         
-        this_DGz += D_G_z1
-        this_Dx += D_x
-        this_Adv += errG_D.data[0]
-        this_L2 += errG_l2.data[0]
-        this_G_tot += errG.data[0]
-        this_D_tot += errD.data[0]
-        
-        if step_counter == STEPS_TO_REPORT:
-            this_Adv *= (1 - wtl2)
-            this_L2 *= wtl2
-            this_DGz /= STEPS_TO_REPORT
-            this_Dx /= STEPS_TO_REPORT
-            this_Adv /= STEPS_TO_REPORT
-            this_L2 /= STEPS_TO_REPORT
-            this_G_tot /= STEPS_TO_REPORT
-            this_D_tot /= STEPS_TO_REPORT
-            
-            D_G_zs.append(this_DGz)
-            D_xs.append(this_Dx)
-            Advs.append(this_Adv)
-            L2s.append(this_L2)
-            G_tots.append(this_G_tot)
-            D_tots.append(this_D_tot)
-            
-            print("\tAVG MEASURE STEP | l_D(x): %.4f | l_D(G(z)): %.4f | l_Adv: %.4f | l_L2: %.4f  | l_Gtot: %.4f  | "
-                  "l_Dtot: %.4f  " % (this_Dx, this_DGz, this_Adv, this_L2, this_G_tot, this_D_tot))
-            
-            # Store measure lists in file
-            t = (D_G_zs, D_xs, Advs, L2s, G_tots, D_tots)
-            pickle.dump(t, open("measures.pickle", "wb"))
-            
+        D_G_zs.append(D_G_z1)
+        D_xs.append(D_x)
+        Advs.append(errG_D.data[0] * (1 - wtl2))
+        L2s.append(errG_l2.data[0] * wtl2)
+        G_tots.append(errG.data[0])
+        D_tots.append(errD.data[0])
+
+        if step_counter == STEPS_TO_PLOT:
             plotter(D_G_zs, D_xs, Advs, L2s, G_tots, D_tots)
-            
-            this_DGz = 0
-            this_Dx = 0
-            this_Adv = 0
-            this_L2 = 0
-            this_G_tot = 0
-            this_D_tot = 0
             step_counter = 0
         
         if i % 100 == 0:
@@ -384,3 +366,7 @@ for epoch in range(resume_epoch, opt.niter):
     torch.save({'epoch': epoch + 1,
                 'state_dict': netD.state_dict()},
                'model/netlocalD.pth')
+    
+    # store measure lists
+    t = (D_G_zs, D_xs, Advs, L2s, G_tots, D_tots)
+    pickle.dump(t, open("measures.pickle", "wb"))
