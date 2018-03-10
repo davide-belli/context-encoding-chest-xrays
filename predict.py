@@ -26,14 +26,14 @@ parser.add_argument('--imageSize', type=int, default=128, help='the height / wid
 parser.add_argument('--nz', type=int, default=100, help='size of the latent z vector')
 parser.add_argument('--ngf', type=int, default=64)
 parser.add_argument('--ndf', type=int, default=64)
-parser.add_argument('--nc', type=int, default=3)
-parser.add_argument('--niter', type=int, default=25, help='number of epochs to train for')
+parser.add_argument('--nc', type=int, default=1)
+parser.add_argument('--niter', type=int, default=1, help='number of epochs to train for')
 parser.add_argument('--lr', type=float, default=0.0002, help='learning rate, default=0.0002')
 parser.add_argument('--beta1', type=float, default=0.5, help='beta1 for adam. default=0.5')
 parser.add_argument('--cuda', action='store_true', help='enables cuda')
 parser.add_argument('--ngpu', type=int, default=1, help='number of GPUs to use')
-parser.add_argument('--netG', default='', help="path to netG (to continue training)")
-parser.add_argument('--netD', default='', help="path to netD (to continue training)")
+parser.add_argument('--netG', default='model/netG_streetview.pth', help="path to netG (to continue training)")
+parser.add_argument('--netD', default='model/netlocalD.pth', help="path to netD (to continue training)")
 parser.add_argument('--outf', default='.', help='folder to output images and model checkpoints')
 parser.add_argument('--manualSeed', type=int, help='manual seed')
 
@@ -46,14 +46,10 @@ parser.add_argument('--wtlD', type=float, default=0.001, help='0 means do not us
 opt = parser.parse_args()
 opt.cuda = True
 
-opt.niter = 1
-opt.netG = 'model/netG_streetview.pth'
-opt.netD = 'model/netlocalD.pth'
+opt.ndf = 128 # In the latest experiment, I double the channel in Discriminator to make it more powerful
+LIMIT_SAMPLES = 5 # Number of sample minibatches to reconstruct. Set to -1 to use all test set
 
-# opt.netG = 'model/' + opt.dataset + '/netG_streetview.pth'
-# opt.netD = 'model/' + opt.dataset + '/netlocalD.pth'
 
-# opt.dataset = "lungs"
 print(opt)
 
 try:
@@ -74,15 +70,6 @@ cudnn.benchmark = True
 if torch.cuda.is_available() and not opt.cuda:
     print("WARNING: You have a CUDA device, so you should probably run with --cuda")
 
-# if opt.dataset in ['imagenet', 'folder', 'lfw']:
-#     # folder dataset
-#     dataset = dset.ImageFolder(root=opt.dataroot,
-#                                transform=transforms.Compose([
-#                                    transforms.Scale(opt.imageSize),
-#                                    transforms.CenterCrop(opt.imageSize),
-#                                    transforms.ToTensor(),
-#                                    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
-#                                ]))
 if opt.dataset == 'tiny-imagenet':
     # folder dataset
     dataset = dset.ImageFolder(root='dataset_tiny_imagenet/test',
@@ -94,22 +81,31 @@ if opt.dataset == 'tiny-imagenet':
                                ]))
 elif opt.dataset == 'lungs':
     # folder dataset
-    dataset = dset.ImageFolder(root='dataset_lungs',
-                               transform=transforms.Compose([
-                                   transforms.Scale(opt.imageSize),
-                                   transforms.CenterCrop(opt.imageSize),
-                                   transforms.ToTensor(),
-                                   # transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
-                               ]))
+    if opt.nc == 1:
+        transform = transforms.Compose([
+        
+            transforms.Grayscale(),
+            transforms.Scale(opt.imageSize),
+            transforms.CenterCrop(opt.imageSize),
+            transforms.ToTensor()
+        ])
+    else:
+        transform = transforms.Compose([
+            transforms.Scale(opt.imageSize),
+            transforms.CenterCrop(opt.imageSize),
+            transforms.ToTensor()
+        ])
+    dataset = dset.ImageFolder(root='dataset_lungs/train', transform=transform)
 elif opt.dataset == 'streetview':
     transform = transforms.Compose([transforms.Scale(opt.imageSize),
                                     transforms.CenterCrop(opt.imageSize),
                                     transforms.ToTensor(),
                                     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
     dataset = dset.ImageFolder(root="dataset/val", transform=transform)
+    
 assert dataset
 dataloader = torch.utils.data.DataLoader(dataset, batch_size=opt.batchSize,
-                                         shuffle=True, num_workers=int(opt.workers))
+                                         shuffle=False, num_workers=int(opt.workers))
 
 ngpu = int(opt.ngpu)
 nz = int(opt.nz)
@@ -181,91 +177,95 @@ optimizerG = optim.Adam(netG.parameters(), lr=opt.lr, betas=(opt.beta1, 0.999))
 
 for epoch in range(resume_epoch, opt.niter):
     for i, data in enumerate(dataloader, 0):
-        real_cpu, _ = data
-        real_center_cpu = real_cpu[:, :, int(opt.imageSize / 4):int(opt.imageSize / 4) + int(opt.imageSize / 2),
-                          int(opt.imageSize / 4):int(opt.imageSize / 4) + int(opt.imageSize / 2)]
-        batch_size = real_cpu.size(0)
-        input_real.data.resize_(real_cpu.size()).copy_(real_cpu)
-        input_cropped.data.resize_(real_cpu.size()).copy_(real_cpu)
-        real_center.data.resize_(real_center_cpu.size()).copy_(real_center_cpu)
-        input_cropped.data[:, 0,
-        int(opt.imageSize / 4 + opt.overlapPred):int(opt.imageSize / 4 + opt.imageSize / 2 - opt.overlapPred),
-        int(opt.imageSize / 4 + opt.overlapPred):int(
-            opt.imageSize / 4 + opt.imageSize / 2 - opt.overlapPred)] = 2 * 117.0 / 255.0 - 1.0
-        input_cropped.data[:, 1,
-        int(opt.imageSize / 4 + opt.overlapPred):int(opt.imageSize / 4 + opt.imageSize / 2 - opt.overlapPred),
-        int(opt.imageSize / 4 + opt.overlapPred):int(
-            opt.imageSize / 4 + opt.imageSize / 2 - opt.overlapPred)] = 2 * 104.0 / 255.0 - 1.0
-        input_cropped.data[:, 2,
-        int(opt.imageSize / 4 + opt.overlapPred):int(opt.imageSize / 4 + opt.imageSize / 2 - opt.overlapPred),
-        int(opt.imageSize / 4 + opt.overlapPred):int(
-            opt.imageSize / 4 + opt.imageSize / 2 - opt.overlapPred)] = 2 * 123.0 / 255.0 - 1.0
+        if LIMIT_SAMPLES == -1 or i < LIMIT_SAMPLES:
+            real_cpu, _ = data
+            real_center_cpu = real_cpu[:, :, int(opt.imageSize / 4):int(opt.imageSize / 4) + int(opt.imageSize / 2),
+                              int(opt.imageSize / 4):int(opt.imageSize / 4) + int(opt.imageSize / 2)]
+            batch_size = real_cpu.size(0)
+            input_real.data.resize_(real_cpu.size()).copy_(real_cpu)
+            input_cropped.data.resize_(real_cpu.size()).copy_(real_cpu)
+            real_center.data.resize_(real_center_cpu.size()).copy_(real_center_cpu)
+            input_cropped.data[:, 0,
+            int(opt.imageSize / 4 + opt.overlapPred):int(opt.imageSize / 4 + opt.imageSize / 2 - opt.overlapPred),
+            int(opt.imageSize / 4 + opt.overlapPred):int(
+                opt.imageSize / 4 + opt.imageSize / 2 - opt.overlapPred)] = 2 * 117.0 / 255.0 - 1.0
+            if opt.nc > 1:
+                input_cropped.data[:, 1,
+                int(opt.imageSize / 4 + opt.overlapPred):int(opt.imageSize / 4 + opt.imageSize / 2 - opt.overlapPred),
+                int(opt.imageSize / 4 + opt.overlapPred):int(
+                    opt.imageSize / 4 + opt.imageSize / 2 - opt.overlapPred)] = 2 * 104.0 / 255.0 - 1.0
+                input_cropped.data[:, 2,
+                int(opt.imageSize / 4 + opt.overlapPred):int(opt.imageSize / 4 + opt.imageSize / 2 - opt.overlapPred),
+                int(opt.imageSize / 4 + opt.overlapPred):int(
+                    opt.imageSize / 4 + opt.imageSize / 2 - opt.overlapPred)] = 2 * 123.0 / 255.0 - 1.0
+            
+            # train with real
+            netD.zero_grad()
+            label.data.resize_(batch_size).fill_(real_label)
+            
+            # input("Proceed..." + str(real_center.data.size()))
+            
+            output = netD(real_center)
+            errD_real = criterion(output, label)
+            # errD_real.backward()
+            D_x = output.data.mean()
+            
+            # train with fake
+            # noise.data.resize_(batch_size, nz, 1, 1)
+            # noise.data.normal_(0, 1)
+            fake = netG(input_cropped)
+            label.data.fill_(fake_label)
+            output = netD(fake.detach())
+            # print(output.data.size(), " ", label.data.size())
+            # input("")
+            errD_fake = criterion(output, label)
+            # errD_fake.backward()
+            D_G_z1 = output.data.mean()
+            errD = errD_real + errD_fake
+            # optimizerD.step()
+            
+            ############################
+            # (2) Update G network: maximize log(D(G(z)))
+            ###########################
+            netG.zero_grad()
+            label.data.fill_(real_label)  # fake labels are real for generator cost
+            output = netD(fake)
+            errG_D = criterion(output, label)
+            # errG_D.backward(retain_variables=True)
+            
+            # errG_l2 = criterionMSE(fake,real_center)
+            wtl2Matrix = real_center.clone()
+            wtl2Matrix.data.fill_(wtl2 * overlapL2Weight)
+            wtl2Matrix.data[:, :, int(opt.overlapPred):int(opt.imageSize / 2 - opt.overlapPred),
+            int(opt.overlapPred):int(opt.imageSize / 2 - opt.overlapPred)] = wtl2
+            
+            errG_l2 = (fake - real_center).pow(2)
+            errG_l2 = errG_l2 * wtl2Matrix
+            errG_l2 = errG_l2.mean()
+            
+            errG = (1 - wtl2) * errG_D + wtl2 * errG_l2
+            
+            # errG.backward()
+            
+            D_G_z2 = output.data.mean()
+            # optimizerG.step()
+            
+            print('[%d/%d][%d/%d] Loss_D: %.4f Loss_G: %.4f / %.4f l_D(x): %.4f l_D(G(z)): %.4f'
+                  % (epoch, opt.niter, i+1, len(dataloader),
+                     errD.data[0], errG_D.data[0], errG_l2.data[0], D_x, D_G_z1,))
+            if i % 100 == i:
+                vutils.save_image(real_cpu,
+                                  'predict/' + str(opt.dataset) + '/'+str(i)+'_real.png')
+                # vutils.save_image(input_cropped.data,
+                #                   'predict/' + str(opt.dataset) + '/cropped/cropped_samples_epoch_%03d.png' % (epoch))
+                recon_image = input_cropped.clone()
+                recon_image.data[:, :, int(opt.imageSize / 4):int(opt.imageSize / 4 + opt.imageSize / 2),
+                int(opt.imageSize / 4):int(opt.imageSize / 4 + opt.imageSize / 2)] = fake.data
+                vutils.save_image(recon_image.data,
+                                  'predict/' + str(opt.dataset) + '/'+str(i)+'_recon.png')
         
-        # train with real
-        netD.zero_grad()
-        label.data.resize_(batch_size).fill_(real_label)
-        
-        # input("Proceed..." + str(real_center.data.size()))
-        
-        output = netD(real_center)
-        errD_real = criterion(output, label)
-        errD_real.backward()
-        D_x = output.data.mean()
-        
-        # train with fake
-        # noise.data.resize_(batch_size, nz, 1, 1)
-        # noise.data.normal_(0, 1)
-        fake = netG(input_cropped)
-        label.data.fill_(fake_label)
-        output = netD(fake.detach())
-        # print(output.data.size(), " ", label.data.size())
-        # input("")
-        errD_fake = criterion(output, label)
-        errD_fake.backward()
-        D_G_z1 = output.data.mean()
-        errD = errD_real + errD_fake
-        optimizerD.step()
-        
-        ############################
-        # (2) Update G network: maximize log(D(G(z)))
-        ###########################
-        netG.zero_grad()
-        label.data.fill_(real_label)  # fake labels are real for generator cost
-        output = netD(fake)
-        errG_D = criterion(output, label)
-        # errG_D.backward(retain_variables=True)
-        
-        # errG_l2 = criterionMSE(fake,real_center)
-        wtl2Matrix = real_center.clone()
-        wtl2Matrix.data.fill_(wtl2 * overlapL2Weight)
-        wtl2Matrix.data[:, :, int(opt.overlapPred):int(opt.imageSize / 2 - opt.overlapPred),
-        int(opt.overlapPred):int(opt.imageSize / 2 - opt.overlapPred)] = wtl2
-        
-        errG_l2 = (fake - real_center).pow(2)
-        errG_l2 = errG_l2 * wtl2Matrix
-        errG_l2 = errG_l2.mean()
-        
-        errG = (1 - wtl2) * errG_D + wtl2 * errG_l2
-        
-        errG.backward()
-        
-        D_G_z2 = output.data.mean()
-        optimizerG.step()
-        
-        print('[%d/%d][%d/%d] Loss_D: %.4f Loss_G: %.4f / %.4f l_D(x): %.4f l_D(G(z)): %.4f'
-              % (epoch, opt.niter, i, len(dataloader),
-                 errD.data[0], errG_D.data[0], errG_l2.data[0], D_x, D_G_z1,))
-        if i % 100 == i:
-            vutils.save_image(real_cpu,
-                              'predict/' + str(opt.dataset) + '/'+str(i)+'_real.png')
-            # vutils.save_image(input_cropped.data,
-            #                   'predict/' + str(opt.dataset) + '/cropped/cropped_samples_epoch_%03d.png' % (epoch))
-            recon_image = input_cropped.clone()
-            recon_image.data[:, :, int(opt.imageSize / 4):int(opt.imageSize / 4 + opt.imageSize / 2),
-            int(opt.imageSize / 4):int(opt.imageSize / 4 + opt.imageSize / 2)] = fake.data
-            vutils.save_image(recon_image.data,
-                              'predict/' + str(opt.dataset) + '/'+str(i)+'_recon.png')
-    
+        else:
+            break
     # do not checkpoint for predictions
     # torch.save({'epoch': epoch + 1,
     #             'state_dict': netG.state_dict()},
