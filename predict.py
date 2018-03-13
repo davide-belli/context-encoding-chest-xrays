@@ -46,8 +46,10 @@ parser.add_argument('--wtlD', type=float, default=0.001, help='0 means do not us
 opt = parser.parse_args()
 opt.cuda = True
 
+opt.nc = 1
 opt.ndf = 128 # In the latest experiment, I double the channel in Discriminator to make it more powerful
-LIMIT_SAMPLES = 5 # Number of sample minibatches to reconstruct. Set to -1 to use all test set
+opt.nef = 128
+LIMIT_SAMPLES = 2 # Number of sample minibatches to reconstruct. Set to -1 to use all test set
 
 
 print(opt)
@@ -144,6 +146,7 @@ if opt.netD != '':
     resume_epoch = torch.load(opt.netD)['epoch']
 print(netD)
 
+print("This model was trained for ", resume_epoch, "epochs.")
 resume_epoch = 0
 
 criterion = nn.BCELoss()
@@ -250,8 +253,8 @@ for epoch in range(resume_epoch, opt.niter):
             D_G_z2 = output.data.mean()
             # optimizerG.step()
             
-            print('[%d/%d][%d/%d] Loss_D: %.4f Loss_G: %.4f / %.4f l_D(x): %.4f l_D(G(z)): %.4f'
-                  % (epoch, opt.niter, i+1, len(dataloader),
+            print('[%d/%d] Loss_D: %.4f Loss_G: %.4f / %.4f l_D(x): %.4f l_D(G(z)): %.4f'
+                  % (i+1, LIMIT_SAMPLES,
                      errD.data[0], errG_D.data[0], errG_l2.data[0], D_x, D_G_z1,))
             if i % 100 == i:
                 vutils.save_image(real_cpu,

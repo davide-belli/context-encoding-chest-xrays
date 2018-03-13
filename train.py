@@ -51,6 +51,7 @@ opt.cuda = True
 
 opt.wtl2 = 0
 opt.ndf = 128
+opt.nef = 128
 CONTINUE_TRAINING = False
 
 if CONTINUE_TRAINING:
@@ -138,13 +139,13 @@ def plotter(D_G_zs, D_xs, Advs, L2s, G_tots, D_tots):
     log_4 = [-math.log(4)] * len(D_tots)
     D_gain = [-k for k in D_tots]  # Discriminator gain defined as negative cross-entropy
     
-    vline_position = [len(dataloader) * x for x in range(int(math.floor(len(D_tots) / len(dataloader))))]
+    vline_position = [len(dataloader)/STEPS_TO_PLOT * (x + 1) for x in range(int(math.floor(len(D_tots) * STEPS_TO_PLOT / len(dataloader))))]
     plt.clf()
     plt.plot(x, D_G_zs, "g-", linewidth=0.5, label="p D(G(z))")
     plt.plot(x, D_xs, "r-", linewidth=0.5, label="p D(x)")
     plt.plot(x, D_gain, "b-", linewidth=0.5, label="Disciminator")
     plt.plot(x, log_4, "k--", linewidth=0.5, label="-log(4)")
-    plt.xlabel('mini-batches of 64 images')
+    plt.xlabel('x200 iterations')
     plt.ylabel('value')
     for k in vline_position:
         plt.axvline(x=k, linewidth=0.2, color='k', linestyle='--')
@@ -154,8 +155,10 @@ def plotter(D_G_zs, D_xs, Advs, L2s, G_tots, D_tots):
     plt.clf()
     plt.plot(x, D_G_zs, "g-", linewidth=0.5, label="p D(G(z))")
     plt.plot(x, D_xs, "r-", linewidth=0.5, label="p D(x)")
-    plt.xlabel('mini-batches of 64 images')
+    plt.xlabel('x200 iterations')
     plt.ylabel('loss')
+    for k in vline_position:
+        plt.axvline(x=k, linewidth=0.2, color='k', linestyle='--')
     lgd = plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
     plt.savefig("plots/fake-real_probs.png", bbox_extra_artists=(lgd,), bbox_inches='tight')
     
@@ -163,15 +166,19 @@ def plotter(D_G_zs, D_xs, Advs, L2s, G_tots, D_tots):
     plt.plot(x, Advs, "b-", linewidth=0.5, label="Adversarial loss")
     plt.plot(x, L2s, "g-", linewidth=0.5, label="L2 loss")
     plt.plot(x, G_tots, "k-", linewidth=0.5, label="Tot Generator loss")
-    plt.xlabel('mini-batches of 64 images')
+    plt.xlabel('x200 iterations')
     plt.ylabel('loss')
+    for k in vline_position:
+        plt.axvline(x=k, linewidth=0.2, color='k', linestyle='--')
     lgd = plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
     plt.savefig("plots/gen_losses.png", bbox_extra_artists=(lgd,), bbox_inches='tight')
     
     plt.clf()
     plt.plot(x, D_tots, "b-", linewidth=0.5, label="Tot Discriminator loss")
-    plt.xlabel('mini-batches of 64 images')
+    plt.xlabel('x200 iterations')
     plt.ylabel('loss')
+    for k in vline_position:
+        plt.axvline(x=k, linewidth=0.2, color='k', linestyle='--')
     lgd = plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
     plt.savefig("plots/disc_losses.png", bbox_extra_artists=(lgd,), bbox_inches='tight')
     
@@ -206,8 +213,6 @@ if opt.netD != '':
     resume_epoch = torch.load(opt.netD)['epoch']
 print(netD)
 
-# resume_epoch = 0
-
 criterion = nn.BCELoss()
 criterionMSE = nn.MSELoss()
 
@@ -238,8 +243,8 @@ optimizerD = optim.Adam(netD.parameters(), lr=opt.lr, betas=(opt.beta1, 0.999))
 optimizerG = optim.Adam(netG.parameters(), lr=opt.lr, betas=(opt.beta1, 0.999))
 
 # store information about losses for plotting
-STEPS_TO_PLOT = 100 # how often to update plots
-N_UPDATE_GEN = 2 # update generator every N discriminator updates
+STEPS_TO_PLOT = 200 # how often to update plots
+N_UPDATE_GEN = 1 # update generator every N discriminator updates
 step_counter = 0
 
 D_G_zs = []
@@ -253,7 +258,14 @@ G_tots = []
 if CONTINUE_TRAINING:
     (D_G_zs, D_xs, Advs, L2s, G_tots, D_tots) = pickle.load(open("measures.pickle", "rb"))
     print("Loaded saved measures with ", len(D_G_zs), "datapoints, approximately ",
-          math.ceil(len(D_G_zs) * STEPS_TO_PLOT / len(dataloader)), "epochs")
+          math.ceil(len(D_G_zs) / len(dataloader)), "epochs")
+
+this_DGz = 0
+this_Dx = 0
+this_Adv = 0
+this_L2 = 0
+this_G_tot = 0
+this_D_tot = 0
 
 for epoch in range(resume_epoch, opt.niter):
     
@@ -336,16 +348,39 @@ for epoch in range(resume_epoch, opt.niter):
         print('[%d/%d][%d/%d] Loss_D: %.4f | Loss_G (Adv/L2->Tot): %.4f / %.4f -> %.4f | p_D(x): %.4f | p_D(G(z)): %.4f'
               % (epoch, opt.niter, i+1, len(dataloader),
                  errD.data[0], errG_D.data[0] * (1 - wtl2), errG_l2.data[0] * wtl2, errG.data[0], D_x, D_G_z1))
-        
-        D_G_zs.append(D_G_z1)
-        D_xs.append(D_x)
-        Advs.append(errG_D.data[0] * (1 - wtl2))
-        L2s.append(errG_l2.data[0] * wtl2)
-        G_tots.append(errG.data[0])
-        D_tots.append(errD.data[0])
+
+        this_DGz += D_G_z1
+        this_Dx += D_x
+        this_Adv += errG_D.data[0]
+        this_L2 += errG_l2.data[0]
+        this_G_tot += errG.data[0]
+        this_D_tot += errD.data[0]
 
         if step_counter == STEPS_TO_PLOT:
+            this_Adv *= (1 - wtl2)
+            this_L2 *= wtl2
+            this_DGz /= STEPS_TO_PLOT
+            this_Dx /= STEPS_TO_PLOT
+            this_Adv /= STEPS_TO_PLOT
+            this_L2 /= STEPS_TO_PLOT
+            this_G_tot /= STEPS_TO_PLOT
+            this_D_tot /= STEPS_TO_PLOT
+            
+            D_G_zs.append(this_DGz)
+            D_xs.append(this_Dx)
+            Advs.append(this_Adv)
+            L2s.append(this_L2)
+            G_tots.append(this_G_tot)
+            D_tots.append(this_D_tot)
+            
             plotter(D_G_zs, D_xs, Advs, L2s, G_tots, D_tots)
+
+            this_DGz = 0
+            this_Dx = 0
+            this_Adv = 0
+            this_L2 = 0
+            this_G_tot = 0
+            this_D_tot = 0
             step_counter = 0
         
         if i % 100 == 0:
