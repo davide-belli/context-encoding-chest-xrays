@@ -49,8 +49,8 @@ parser.add_argument('--wtlD', type=float, default=0.001, help='0 means do not us
 opt = parser.parse_args()
 opt.cuda = True
 
-opt.wtl2 = 0
-opt.ndf = 128
+# opt.wtl2 = 0
+# opt.ndf = 128
 opt.nef = 128
 CONTINUE_TRAINING = False
 
@@ -244,7 +244,7 @@ optimizerG = optim.Adam(netG.parameters(), lr=opt.lr, betas=(opt.beta1, 0.999))
 
 # store information about losses for plotting
 STEPS_TO_PLOT = 200 # how often to update plots
-N_UPDATE_GEN = 1 # update generator every N discriminator updates
+N_UPDATE_GEN = 2 # update generator every N discriminator updates
 step_counter = 0
 
 D_G_zs = []
