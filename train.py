@@ -18,7 +18,6 @@ import time
 
 from model import _netlocalD, _netG
 from plotter import plotter
-import utils
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataset', default='lungs', help='streetview | tiny-imagenet | lungs ')
