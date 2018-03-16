@@ -24,6 +24,7 @@ parser.add_argument('--workers', type=int, help='number of data loading workers'
 parser.add_argument('--batchSize', type=int, default=64, help='input batch size')
 parser.add_argument('--imageSize', type=int, default=128, help='the height / width of the input image to network')
 parser.add_argument('--patchSize', type=int, default=64, help='the height / width of the patch to be reconstructed')
+parser.add_argument('--beforeCropSize', type=int, default=128, help='the height / width of the patch to be reconstructed')
 
 parser.add_argument('--nz', type=int, default=100, help='size of the latent z vector')
 parser.add_argument('--ngf', type=int, default=64)
@@ -49,8 +50,8 @@ opt = parser.parse_args()
 opt.cuda = True
 
 opt.ndf = 128  # Discriminator
-opt.nef = 128  # Generator
-LIMIT_SAMPLES = 2  # Number of sample minibatches to reconstruct. Set to -1 to use all test set
+# opt.nef = 128  # Generator
+LIMIT_SAMPLES = 3  # Number of sample minibatches to reconstruct. Set to -1 to use all test set
 
 print(opt)
 
@@ -61,7 +62,7 @@ except OSError:
 
 if opt.manualSeed is None:
     opt.manualSeed = 1234  # random.randint(1, 10000)
-print("Random Seed: ", opt.manualSeed)
+
 random.seed(opt.manualSeed)
 torch.manual_seed(opt.manualSeed)
 if opt.cuda:
@@ -76,7 +77,7 @@ if opt.dataset == 'tiny-imagenet':
     # folder dataset
     dataset = dset.ImageFolder(root='dataset_tiny_imagenet/test',
                                transform=transforms.Compose([
-                                   transforms.Scale(opt.imageSize),
+                                   transforms.Resize(opt.imageSize),
                                    transforms.CenterCrop(opt.imageSize),
                                    transforms.ToTensor(),
                                    # transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
@@ -87,19 +88,19 @@ elif opt.dataset == 'lungs':
         transform = transforms.Compose([
             
             transforms.Grayscale(),
-            transforms.Scale(opt.imageSize),
+            transforms.Resize(opt.imageSize),
             transforms.CenterCrop(opt.imageSize),
             transforms.ToTensor()
         ])
     else:
         transform = transforms.Compose([
-            transforms.Scale(opt.imageSize),
+            transforms.Resize(opt.imageSize),
             transforms.CenterCrop(opt.imageSize),
             transforms.ToTensor()
         ])
     dataset = dset.ImageFolder(root='dataset_lungs/train', transform=transform)
 elif opt.dataset == 'streetview':
-    transform = transforms.Compose([transforms.Scale(opt.imageSize),
+    transform = transforms.Compose([transforms.Resize(opt.imageSize),
                                     transforms.CenterCrop(opt.imageSize),
                                     transforms.ToTensor(),
                                     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
@@ -204,7 +205,7 @@ for epoch in range(resume_epoch, opt.niter):
             
             # train with real
             netD.zero_grad()
-            label.data.resize_(batch_size).fill_(real_label)
+            label.data.resize_(batch_size, 1).fill_(real_label)
             
             # input("Proceed..." + str(real_center.data.size()))
             
@@ -269,21 +270,24 @@ for epoch in range(resume_epoch, opt.niter):
             # Compute PSNR
             fake_np = fake.data.cpu().numpy()
             real_center_np = real_center.data.cpu().numpy()
-            t = real_center_np - fake_np
             
+            # t = real_center_np - fake_np
             # l2 = np.mean(np.square(t))
             # print(l2)
             # l1 = np.mean(np.abs(t))
             # print(l1)
-            #
-            # real_center = (real_center + 1) * 127.5
-            # fake = (fake + 1) * 127.5
+            
+            real_center_np = (real_center_np + 1) * 127.5
+            fake_np = (fake_np + 1) * 127.5
+            # print(real_center_np[0].shape)
+            # print((real_center_np[0].transpose(1, 2, 0)).shape)
+            # input()
             
             p = 0
             for j in range(opt.batchSize):
-                p = p + psnr(real_center_np[j].transpose(1, 2, 0), fake_np[j].transpose(1, 2, 0))
-            
-            print("\PSNR: ", p / opt.batchSize)
+                p += psnr(real_center_np[j].transpose(1, 2, 0), fake_np[j].transpose(1, 2, 0))
+                
+            print("\t  PSNR: ", p / opt.batchSize)
         
         
         else:
