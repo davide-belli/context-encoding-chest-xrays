@@ -5,10 +5,11 @@ import torch.nn as nn
 class _netG(nn.Module):
     def __init__(self, opt):
         super(_netG, self).__init__()
+        self.multiplierG = opt.imageSize / (opt.patchSize * 2)
         self.ngpu = opt.ngpu
         self.main = nn.Sequential(
             # input is (nc) x 128 x 128
-            nn.Conv2d(opt.nc, opt.nef, 4, 2, 1, bias=False),
+            nn.Conv2d(opt.nc, opt.nef, int(4 * self.multiplierG), int(2 * self.multiplierG), int(1 * self.multiplierG), bias=False), #modified
             nn.LeakyReLU(0.2, inplace=True),
             # state size: (nef) x 64 x 64
             nn.Conv2d(opt.nef, opt.nef, 4, 2, 1, bias=False),
@@ -28,7 +29,7 @@ class _netG(nn.Module):
             nn.LeakyReLU(0.2, inplace=True),
             # state size: (nef*8) x 4 x 4
             nn.Conv2d(opt.nef * 8, opt.nBottleneck, 4, bias=False),
-            # tate size: (nBottleneck) x 1 x 1
+            # state size: (nBottleneck) x 1 x 1
             nn.BatchNorm2d(opt.nBottleneck),
             nn.LeakyReLU(0.2, inplace=True),
             # input is Bottleneck, going into a convolution
@@ -65,9 +66,10 @@ class _netlocalD(nn.Module):
     def __init__(self, opt):
         super(_netlocalD, self).__init__()
         self.ngpu = opt.ngpu
+        self.multiplierD = opt.patchSize / 64
         self.main = nn.Sequential(
             # input is (nc) x 64 x 64
-            nn.Conv2d(opt.nc, opt.ndf, 4, 2, 1, bias=False),
+            nn.Conv2d(opt.nc, opt.ndf, int(4 * self.multiplierD), int(2 * self.multiplierD), int(1 * self.multiplierD), bias=False),
             nn.LeakyReLU(0.2, inplace=True),
             # state size. (ndf) x 32 x 32
             nn.Conv2d(opt.ndf, opt.ndf * 2, 4, 2, 1, bias=False),
