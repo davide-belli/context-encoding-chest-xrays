@@ -26,6 +26,7 @@ parser.add_argument('--workers', type=int, help='number of data loading workers'
 parser.add_argument('--batchSize', type=int, default=64, help='input batch size')
 parser.add_argument('--imageSize', type=int, default=128, help='the height / width of the input image to network')
 parser.add_argument('--patchSize', type=int, default=64, help='the height / width of the patch to be reconstructed')
+parser.add_argument('--beforeCropSize', type=int, default=128, help='the height / width of the patch to be reconstructed')
 
 parser.add_argument('--nz', type=int, default=100, help='size of the latent z vector')
 parser.add_argument('--ngf', type=int, default=64)
@@ -53,8 +54,9 @@ opt.cuda = True
 # opt.wtl2 = 0
 # opt.ndf = 128 #Discriminator
 # opt.nef = 128 #Generator
-# opt.imageSize = 256
-# opt.patchSize = 128
+opt.imageSize = 512
+opt.patchSize = 128
+opt.beforeCropSize = 1024
 
 CONTINUE_TRAINING = False
 
@@ -101,7 +103,7 @@ if opt.dataset == 'tiny-imagenet':
     # folder dataset
     dataset = dset.ImageFolder(root='dataset_tiny_imagenet/train',
                                transform=transforms.Compose([
-                                   transforms.Scale(opt.imageSize),
+                                   transforms.Resize(opt.imageSize),
                                    transforms.CenterCrop(opt.imageSize),
                                    transforms.ToTensor(),
                                    # transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
@@ -111,21 +113,21 @@ elif opt.dataset == 'lungs':
     if opt.nc == 1:
         transform = transforms.Compose([
             transforms.Grayscale(),
-            transforms.Scale(opt.imageSize),
+            transforms.Resize(opt.beforeCropSize),
             transforms.CenterCrop(opt.imageSize),
             transforms.ToTensor(),
             # transforms.Normalize([0.5], [0.5])
         ])
     else:
         transform = transforms.Compose([
-            transforms.Scale(opt.imageSize),
+            transforms.Resize(opt.beforeCropSize),
             transforms.CenterCrop(opt.imageSize),
             transforms.ToTensor(),
             # transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
         ])
     dataset = dset.ImageFolder(root='dataset_lungs/train', transform=transform)
 elif opt.dataset == 'streetview':
-    transform = transforms.Compose([transforms.Scale(opt.imageSize),
+    transform = transforms.Compose([transforms.Resize(opt.imageSize),
                                     transforms.CenterCrop(opt.imageSize),
                                     transforms.ToTensor(),
                                     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
@@ -264,7 +266,7 @@ for epoch in range(resume_epoch, opt.niter):
         
         # train with real
         netD.zero_grad()
-        label.data.resize_(batch_size).fill_(real_label)
+        label.data.resize_(batch_size, 1).fill_(real_label)
         
         # input("Proceed..." + str(real_center.data.size()))
 
