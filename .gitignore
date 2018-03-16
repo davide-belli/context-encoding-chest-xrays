@@ -9,3 +9,4 @@
 old*.py
 lungs.*
 *.pickle
+*.pyc
