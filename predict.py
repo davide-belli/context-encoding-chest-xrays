@@ -268,8 +268,6 @@ for epoch in range(resume_epoch, opt.niter):
                               'predict/' + str(opt.dataset) + '/' + str(i) + '_recon.png')
             
             # Compute PSNR
-            fake_np = fake.data.cpu().numpy()
-            real_center_np = real_center.data.cpu().numpy()
             
             # t = real_center_np - fake_np
             # l2 = np.mean(np.square(t))
@@ -277,17 +275,19 @@ for epoch in range(resume_epoch, opt.niter):
             # l1 = np.mean(np.abs(t))
             # print(l1)
             
-            real_center_np = (real_center_np + 1) * 127.5
-            fake_np = (fake_np + 1) * 127.5
-            # print(real_center_np[0].shape)
-            # print((real_center_np[0].transpose(1, 2, 0)).shape)
-            # input()
+            
+            real_center_np = (real_center.data.cpu().numpy() + 1) * 127.5
+            fake_np = (fake.data.cpu().numpy() + 1) * 127.5
+            real_cpu_np = (real_cpu.cpu().numpy() + 1) * 127.5
+            recon_image_np = (recon_image.data.cpu().numpy() + 1) * 127.5
             
             p = 0
+            total_p = 0
             for j in range(opt.batchSize):
                 p += psnr(real_center_np[j].transpose(1, 2, 0), fake_np[j].transpose(1, 2, 0))
-                
-            print("\t  PSNR: ", p / opt.batchSize)
+                total_p += psnr(real_cpu_np[j].transpose(1, 2, 0), recon_image_np[j].transpose(1, 2, 0))
+            print("\t  PSNR per Patch: ", p / opt.batchSize)
+            print("\t  PSNR per Image: ", total_p / opt.batchSize)
         
         
         else:
