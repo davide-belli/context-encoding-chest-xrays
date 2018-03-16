@@ -22,6 +22,7 @@ parser.add_argument('--dataroot', default='', help='path to dataset')
 parser.add_argument('--workers', type=int, help='number of data loading workers', default=2)
 parser.add_argument('--batchSize', type=int, default=64, help='input batch size')
 parser.add_argument('--imageSize', type=int, default=128, help='the height / width of the input image to network')
+parser.add_argument('--patchSize', type=int, default=64, help='the height / width of the patch to be reconstructed')
 
 parser.add_argument('--nz', type=int, default=100, help='size of the latent z vector')
 parser.add_argument('--ngf', type=int, default=64)
@@ -46,9 +47,8 @@ parser.add_argument('--wtlD', type=float, default=0.001, help='0 means do not us
 opt = parser.parse_args()
 opt.cuda = True
 
-opt.nc = 1
-opt.ndf = 128 # In the latest experiment, I double the channel in Discriminator to make it more powerful
-opt.nef = 128
+opt.ndf = 128 #Discriminator
+opt.nef = 128 #Generator
 LIMIT_SAMPLES = 2 # Number of sample minibatches to reconstruct. Set to -1 to use all test set
 
 
