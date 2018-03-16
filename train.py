@@ -15,6 +15,7 @@ from torch.autograd import Variable
 import pickle
 import matplotlib.pyplot as plt
 import math
+import time
 
 from model import _netlocalD, _netG
 import utils
@@ -25,6 +26,7 @@ parser.add_argument('--dataroot', default='', help='path to dataset')
 parser.add_argument('--workers', type=int, help='number of data loading workers', default=2)
 parser.add_argument('--batchSize', type=int, default=64, help='input batch size')
 parser.add_argument('--imageSize', type=int, default=128, help='the height / width of the input image to network')
+parser.add_argument('--patchSize', type=int, default=64, help='the height / width of the patch to be reconstructed')
 
 parser.add_argument('--nz', type=int, default=100, help='size of the latent z vector')
 parser.add_argument('--ngf', type=int, default=64)
@@ -50,9 +52,12 @@ opt = parser.parse_args()
 opt.cuda = True
 
 # opt.wtl2 = 0
-# opt.ndf = 128
-opt.nef = 128
-CONTINUE_TRAINING = False
+opt.ndf = 128 #Discriminator
+opt.nef = 128 #Generator
+# opt.imageSize = 256
+# opt.patchSize = 128
+
+CONTINUE_TRAINING = True
 
 if CONTINUE_TRAINING:
     print("Continuing with the training of an existing model")
@@ -63,7 +68,17 @@ print(opt)
 
 try:
     os.makedirs("plots")
+except OSError:
+    pass
+try:
     os.makedirs("model")
+except OSError:
+    pass
+try:
+    os.makedirs("result/" + str(opt.dataset))
+except OSError:
+    pass
+try:
     os.makedirs('result/' + str(opt.dataset) + '/cropped')
     os.makedirs('result/' + str(opt.dataset) + '/real')
     os.makedirs('result/' + str(opt.dataset) + '/recon')
@@ -213,6 +228,9 @@ if opt.netD != '':
     resume_epoch = torch.load(opt.netD)['epoch']
 print(netD)
 
+if CONTINUE_TRAINING:
+    print("Contuining from resume epoch:", resume_epoch)
+
 criterion = nn.BCELoss()
 criterionMSE = nn.MSELoss()
 
@@ -244,7 +262,7 @@ optimizerG = optim.Adam(netG.parameters(), lr=opt.lr, betas=(opt.beta1, 0.999))
 
 # store information about losses for plotting
 STEPS_TO_PLOT = 200 # how often to update plots
-N_UPDATE_GEN = 2 # update generator every N discriminator updates
+N_UPDATE_GEN = 1 # update generator every N discriminator updates
 step_counter = 0
 
 D_G_zs = []
@@ -258,7 +276,7 @@ G_tots = []
 if CONTINUE_TRAINING:
     (D_G_zs, D_xs, Advs, L2s, G_tots, D_tots) = pickle.load(open("measures.pickle", "rb"))
     print("Loaded saved measures with ", len(D_G_zs), "datapoints, approximately ",
-          math.ceil(len(D_G_zs) / len(dataloader)), "epochs")
+          math.ceil(len(D_G_zs) * STEPS_TO_PLOT / len(dataloader)), "epochs")
 
 this_DGz = 0
 this_Dx = 0
@@ -268,38 +286,46 @@ this_G_tot = 0
 this_D_tot = 0
 
 for epoch in range(resume_epoch, opt.niter):
+    epoch_time = time.time()
     
     for i, data in enumerate(dataloader, 0):
         step_counter += 1
         
         real_cpu, _ = data
-        real_center_cpu = real_cpu[:, :, int(opt.imageSize / 4):int(opt.imageSize / 4) + int(opt.imageSize / 2),
-                          int(opt.imageSize / 4):int(opt.imageSize / 4) + int(opt.imageSize / 2)]
+        real_center_cpu = real_cpu[:, :, int(opt.imageSize / 2 - opt.patchSize/2):int(opt.imageSize / 2 + opt.patchSize/2),
+                          int(opt.imageSize / 2 - opt.patchSize/2):int(opt.imageSize / 2 + opt.patchSize/2)]
         batch_size = real_cpu.size(0)
         input_real.data.resize_(real_cpu.size()).copy_(real_cpu)
         input_cropped.data.resize_(real_cpu.size()).copy_(real_cpu)
         real_center.data.resize_(real_center_cpu.size()).copy_(real_center_cpu)
         input_cropped.data[:, 0,
-        int(opt.imageSize / 4 + opt.overlapPred):int(opt.imageSize / 4 + opt.imageSize / 2 - opt.overlapPred),
-        int(opt.imageSize / 4 + opt.overlapPred):int(
-            opt.imageSize / 4 + opt.imageSize / 2 - opt.overlapPred)] = 2 * 117.0 / 255.0 - 1.0
+        int(opt.imageSize / 2 - opt.patchSize/2 + opt.overlapPred):int(
+            opt.imageSize / 2 + opt.patchSize/2 - opt.overlapPred),
+        int(opt.imageSize / 2 - opt.patchSize/2 + opt.overlapPred):int(
+            opt.imageSize / 2 + opt.patchSize/2 - opt.overlapPred)] = 2 * 117.0 / 255.0 - 1.0
         if opt.nc > 1:
             input_cropped.data[:, 1,
-            int(opt.imageSize / 4 + opt.overlapPred):int(opt.imageSize / 4 + opt.imageSize / 2 - opt.overlapPred),
-            int(opt.imageSize / 4 + opt.overlapPred):int(
-                opt.imageSize / 4 + opt.imageSize / 2 - opt.overlapPred)] = 2 * 104.0 / 255.0 - 1.0
+            int(opt.imageSize / 2 - opt.patchSize/2 + opt.overlapPred):int(
+                opt.imageSize / 2 + opt.patchSize/2 - opt.overlapPred),
+            int(opt.imageSize / 2 - opt.patchSize/2 + opt.overlapPred):int(
+                opt.imageSize / 2 + opt.patchSize/2 - opt.overlapPred)] = 2 * 104.0 / 255.0 - 1.0
             input_cropped.data[:, 2,
-            int(opt.imageSize / 4 + opt.overlapPred):int(opt.imageSize / 4 + opt.imageSize / 2 - opt.overlapPred),
-            int(opt.imageSize / 4 + opt.overlapPred):int(
-                opt.imageSize / 4 + opt.imageSize / 2 - opt.overlapPred)] = 2 * 123.0 / 255.0 - 1.0
+            int(opt.imageSize / 2 - opt.patchSize/2 + opt.overlapPred):int(
+                opt.imageSize / 2 + opt.patchSize/2 - opt.overlapPred),
+            int(opt.imageSize / 2 - opt.patchSize/2 + opt.overlapPred):int(
+                opt.imageSize / 2 + opt.patchSize/2 - opt.overlapPred)] = 2 * 123.0 / 255.0 - 1.0
         
         # train with real
         netD.zero_grad()
         label.data.resize_(batch_size).fill_(real_label)
         
         # input("Proceed..." + str(real_center.data.size()))
-        
+
+        # print(real_center.data.size())
         output = netD(real_center)
+        # print(output.data.size())
+        # print(label.data.size())
+        # input()
         errD_real = criterion(output, label)
         errD_real.backward()
         D_x = output.data.mean()
@@ -308,6 +334,7 @@ for epoch in range(resume_epoch, opt.niter):
         # noise.data.resize_(batch_size, nz, 1, 1)
         # noise.data.normal_(0, 1)
         fake = netG(input_cropped)
+        # print(fake.data.size(), " ", input_cropped.data.size())
         label.data.fill_(fake_label)
         output = netD(fake.detach())
         # print(output.data.size(), " ", label.data.size())
@@ -346,7 +373,7 @@ for epoch in range(resume_epoch, opt.niter):
             optimizerG.step()
         
         print('[%d/%d][%d/%d] Loss_D: %.4f | Loss_G (Adv/L2->Tot): %.4f / %.4f -> %.4f | p_D(x): %.4f | p_D(G(z)): %.4f'
-              % (epoch, opt.niter, i+1, len(dataloader),
+              % (epoch+1, opt.niter, i+1, len(dataloader),
                  errD.data[0], errG_D.data[0] * (1 - wtl2), errG_l2.data[0] * wtl2, errG.data[0], D_x, D_G_z1))
 
         this_DGz += D_G_z1
@@ -386,11 +413,11 @@ for epoch in range(resume_epoch, opt.niter):
         if i % 100 == 0:
             vutils.save_image(real_cpu,
                               'result/' + str(opt.dataset) + '/real/real_samples_epoch_%03d.png' % (epoch))
-            vutils.save_image(input_cropped.data,
-                              'result/' + str(opt.dataset) + '/cropped/cropped_samples_epoch_%03d.png' % (epoch))
+            # vutils.save_image(input_cropped.data,
+            #                   'result/' + str(opt.dataset) + '/cropped/cropped_samples_epoch_%03d.png' % (epoch))
             recon_image = input_cropped.clone()
-            recon_image.data[:, :, int(opt.imageSize / 4):int(opt.imageSize / 4 + opt.imageSize / 2),
-            int(opt.imageSize / 4):int(opt.imageSize / 4 + opt.imageSize / 2)] = fake.data
+            recon_image.data[:, :, int(opt.imageSize / 2 - opt.patchSize/2):int(opt.imageSize / 2 + opt.patchSize/2),
+            int(opt.imageSize / 2 - opt.patchSize/2):int(opt.imageSize / 2 + opt.patchSize/2)] = fake.data
             vutils.save_image(recon_image.data,
                               'result/' + str(opt.dataset) + '/recon/recon_center_samples__epoch_%03d.png' % (epoch))
     
@@ -405,3 +432,5 @@ for epoch in range(resume_epoch, opt.niter):
     # store measure lists
     t = (D_G_zs, D_xs, Advs, L2s, G_tots, D_tots)
     pickle.dump(t, open("measures.pickle", "wb"))
+    
+    print("\tEpoch", epoch+1, "took ", (time.time()-epoch_time)/60, "minutes")
