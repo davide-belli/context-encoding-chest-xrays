@@ -12,9 +12,10 @@ import torchvision.datasets as dset
 import torchvision.transforms as transforms
 import torchvision.utils as vutils
 from torch.autograd import Variable
+import numpy as np
 
 from model import _netlocalD, _netG
-import utils
+from psnr import psnr
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataset', default='lungs', help='streetview | tiny-imagenet | lungs ')
@@ -47,10 +48,9 @@ parser.add_argument('--wtlD', type=float, default=0.001, help='0 means do not us
 opt = parser.parse_args()
 opt.cuda = True
 
-opt.ndf = 128 #Discriminator
-opt.nef = 128 #Generator
-LIMIT_SAMPLES = 2 # Number of sample minibatches to reconstruct. Set to -1 to use all test set
-
+opt.ndf = 128  # Discriminator
+opt.nef = 128  # Generator
+LIMIT_SAMPLES = 2  # Number of sample minibatches to reconstruct. Set to -1 to use all test set
 
 print(opt)
 
@@ -85,7 +85,7 @@ elif opt.dataset == 'lungs':
     # folder dataset
     if opt.nc == 1:
         transform = transforms.Compose([
-        
+            
             transforms.Grayscale(),
             transforms.Scale(opt.imageSize),
             transforms.CenterCrop(opt.imageSize),
@@ -104,7 +104,7 @@ elif opt.dataset == 'streetview':
                                     transforms.ToTensor(),
                                     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
     dataset = dset.ImageFolder(root="dataset/val", transform=transform)
-    
+
 assert dataset
 dataloader = torch.utils.data.DataLoader(dataset, batch_size=opt.batchSize,
                                          shuffle=False, num_workers=int(opt.workers))
@@ -254,25 +254,37 @@ for epoch in range(resume_epoch, opt.niter):
             # optimizerG.step()
             
             print('[%d/%d] Loss_D: %.4f Loss_G: %.4f / %.4f l_D(x): %.4f l_D(G(z)): %.4f'
-                  % (i+1, LIMIT_SAMPLES,
+                  % (i + 1, LIMIT_SAMPLES,
                      errD.data[0], errG_D.data[0], errG_l2.data[0], D_x, D_G_z1,))
-            if i % 100 == i:
-                vutils.save_image(real_cpu,
-                                  'predict/' + str(opt.dataset) + '/'+str(i)+'_real.png')
-                # vutils.save_image(input_cropped.data,
-                #                   'predict/' + str(opt.dataset) + '/cropped/cropped_samples_epoch_%03d.png' % (epoch))
-                recon_image = input_cropped.clone()
-                recon_image.data[:, :, int(opt.imageSize / 4):int(opt.imageSize / 4 + opt.imageSize / 2),
-                int(opt.imageSize / 4):int(opt.imageSize / 4 + opt.imageSize / 2)] = fake.data
-                vutils.save_image(recon_image.data,
-                                  'predict/' + str(opt.dataset) + '/'+str(i)+'_recon.png')
+            
+            vutils.save_image(real_cpu,
+                              'predict/' + str(opt.dataset) + '/' + str(i) + '_real.png')
+            recon_image = input_cropped.clone()
+            recon_image.data[:, :,
+            int(opt.imageSize / 2 - opt.patchSize / 2):int(opt.imageSize / 2 + opt.patchSize / 2),
+            int(opt.imageSize / 2 - opt.patchSize / 2):int(opt.imageSize / 2 + opt.patchSize / 2)] = fake.data
+            vutils.save_image(recon_image.data,
+                              'predict/' + str(opt.dataset) + '/' + str(i) + '_recon.png')
+            
+            # Compute PSNR
+            fake_np = fake.data.cpu().numpy()
+            real_center_np = real_center.data.cpu().numpy()
+            t = real_center_np - fake_np
+            
+            # l2 = np.mean(np.square(t))
+            # print(l2)
+            # l1 = np.mean(np.abs(t))
+            # print(l1)
+            #
+            # real_center = (real_center + 1) * 127.5
+            # fake = (fake + 1) * 127.5
+            
+            p = 0
+            for j in range(opt.batchSize):
+                p = p + psnr(real_center_np[j].transpose(1, 2, 0), fake_np[j].transpose(1, 2, 0))
+            
+            print("\PSNR: ", p / opt.batchSize)
+        
         
         else:
             break
-    # do not checkpoint for predictions
-    # torch.save({'epoch': epoch + 1,
-    #             'state_dict': netG.state_dict()},
-    #            'model/netG_streetview.pth')
-    # torch.save({'epoch': epoch + 1,
-    #             'state_dict': netD.state_dict()},
-    #            'model/netlocalD.pth')
