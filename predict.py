@@ -51,7 +51,7 @@ opt.cuda = True
 
 opt.ndf = 128  # Discriminator
 # opt.nef = 128  # Generator
-LIMIT_SAMPLES = 3  # Number of sample minibatches to reconstruct. Set to -1 to use all test set
+LIMIT_SAMPLES = 1  # Number of sample minibatches to reconstruct. Set to -1 to use all test set
 
 print(opt)
 
@@ -98,7 +98,7 @@ elif opt.dataset == 'lungs':
             transforms.CenterCrop(opt.imageSize),
             transforms.ToTensor()
         ])
-    dataset = dset.ImageFolder(root='dataset_lungs/train', transform=transform)
+    dataset = dset.ImageFolder(root='dataset_lungs/test_64', transform=transform)
 elif opt.dataset == 'streetview':
     transform = transforms.Compose([transforms.Resize(opt.imageSize),
                                     transforms.CenterCrop(opt.imageSize),
