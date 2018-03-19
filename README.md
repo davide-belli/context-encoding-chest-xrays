@@ -47,3 +47,33 @@ based on : [context-encoder-pytorch](https://github.com/BoyuanJiang/context_enco
   - Input model has nc=1 channel (added Grayscale transformation in train.py)
   - Input model has ndf=128 channels (improved Discriminator from 64 in older versions)
   - Reconstruction on the test set now output the same minibatches to make comparison easier between different models. The number of output minibatches is defined in LIMIT_SAMPLES
+
+
+
+### Changes in version 17/03/2018
+
+- train.py
+
+  - Back to plotting every 200 mini-batches
+  - now using a different architecture in bottleneck (doubling channels and dividing by two the size at every conv, same at deconv)
+
+
+- predict.py
+
+  - using fixed batch of 64 images for testing, those image IDs can be found in dataset_lungs/test_64
+  - now returning average PSNR over patches (best result: ~31) and over images (best result: ~37) for every minibatch
+
+
+- psnr.py
+  
+  - computes psnr for an image
+
+
+- plotter.py
+
+  - the plotting function is now separated from the main.py
+
+
+- train512.py and model512.py
+
+  - experiment ready adding more layers to fit an input image of 512 (center cropped from original 1024) and patch size 128, with both initial channels = 128 for Discriminator and Generator, being doubled at every conv step
