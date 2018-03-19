@@ -1,9 +1,13 @@
+#import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+
 import math
 
 
 # plot losses on a unique figure 'plot.png'
-def plotter(D_G_zs, D_xs, Advs, L2s, G_tots, D_tots, points_per_epoch):
+def plotter(D_G_zs, D_xs, Advs, L2s, G_tots, D_tots, points_per_epoch, PATH_plots):
     x = list(range(len(D_tots)))
     log_4 = [-math.log(4)] * len(D_tots)
     D_gain = [-k for k in D_tots]  # Discriminator gain defined as negative cross-entropy
@@ -19,7 +23,7 @@ def plotter(D_G_zs, D_xs, Advs, L2s, G_tots, D_tots, points_per_epoch):
     for k in vline_position:
         plt.axvline(x=k, linewidth=0.2, color='k', linestyle='--')
     lgd = plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
-    plt.savefig("plots/main4.png", bbox_extra_artists=(lgd,), bbox_inches='tight')
+    plt.savefig(PATH_plots + "/main4.png", bbox_extra_artists=(lgd,), bbox_inches='tight')
     
     plt.clf()
     plt.plot(x, D_G_zs, "g-", linewidth=0.5, label="p D(G(z))")
@@ -29,7 +33,7 @@ def plotter(D_G_zs, D_xs, Advs, L2s, G_tots, D_tots, points_per_epoch):
     for k in vline_position:
         plt.axvline(x=k, linewidth=0.2, color='k', linestyle='--')
     lgd = plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
-    plt.savefig("plots/fake-real_probs.png", bbox_extra_artists=(lgd,), bbox_inches='tight')
+    plt.savefig(PATH_plots + "/fake-real_probs.png", bbox_extra_artists=(lgd,), bbox_inches='tight')
     
     plt.clf()
     plt.plot(x, Advs, "b-", linewidth=0.5, label="Adversarial loss")
@@ -40,7 +44,7 @@ def plotter(D_G_zs, D_xs, Advs, L2s, G_tots, D_tots, points_per_epoch):
     for k in vline_position:
         plt.axvline(x=k, linewidth=0.2, color='k', linestyle='--')
     lgd = plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
-    plt.savefig("plots/gen_losses.png", bbox_extra_artists=(lgd,), bbox_inches='tight')
+    plt.savefig(PATH_plots + "/gen_losses.png", bbox_extra_artists=(lgd,), bbox_inches='tight')
     
     plt.clf()
     plt.plot(x, D_tots, "b-", linewidth=0.5, label="Tot Discriminator loss")
@@ -49,6 +53,6 @@ def plotter(D_G_zs, D_xs, Advs, L2s, G_tots, D_tots, points_per_epoch):
     for k in vline_position:
         plt.axvline(x=k, linewidth=0.2, color='k', linestyle='--')
     lgd = plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
-    plt.savefig("plots/disc_losses.png", bbox_extra_artists=(lgd,), bbox_inches='tight')
+    plt.savefig(PATH_plots + "/disc_losses.png", bbox_extra_artists=(lgd,), bbox_inches='tight')
     
     return
