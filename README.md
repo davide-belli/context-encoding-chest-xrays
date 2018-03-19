@@ -77,3 +77,24 @@ based on : [context-encoder-pytorch](https://github.com/BoyuanJiang/context_enco
 - train512.py and model512.py
 
   - experiment ready adding more layers to fit an input image of 512 (center cropped from original 1024) and patch size 128, with both initial channels = 128 for Discriminator and Generator, being doubled at every conv step
+
+
+
+
+### Changes in version 19/03/2018
+
+- train.py
+
+  - all hyperparameters can be set by command line arguments
+  - all outputs are now well-organized in folders (check PATH_* variables in the code for directories name).
+  - the main directory containing results includes description of 4 main architecture parameters (imageSize, patchSize, nef, ndf), plus a name for that experiment (and folder) can be specified with --name
+  - prediction on testset are now executed at the end of every epoch and saved in a subdirectory.
+  - PSNR values for every epoch on test step are now saved in a .txt file in the test subdirectory.
+  - randomCrop experiment allow to run that particular experiment, additionally setting parameters as padding, number of crops per image (dataset size will be n_crops times n_images), size of central area from which get randomCrops.
+  - testing the recunstruction of the whole image adding back the randomCrops is now added to the test phase, but currently not running as expected (some bug to be fixed)
+  - all unused code, parameters and comments are removed
+
+- model.py
+
+  - both context-encoder and discriminator are now created automatically depending on imageSize, patchSize, nef, ndf using the architecture discussed
+  - added names and description for every layer to be displayed when the model is created at runtime
