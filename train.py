@@ -27,7 +27,7 @@ parser.add_argument('--batchSize', type=int, default=64, help='input batch size'
 parser.add_argument('--imageSize', type=int, default=128, help='the height / width of the input image to network')
 parser.add_argument('--patchSize', type=int, default=64, help='the height / width of the patch to be reconstructed')
 parser.add_argument('--beforeCropSize', type=int, default=1024,
-                    help='the height / width of the patch to be reconstructed')
+                    help='the height / width of the rescaled image before eventual cropping')
 parser.add_argument('--name', default='default_experiment', help='the name of the experiment used for the directory')
 
 # parser.add_argument('--nz', type=int, default=100, help='size of the latent z vector')
@@ -41,6 +41,7 @@ parser.add_argument('--cuda', action='store_true', help='enables cuda')
 parser.add_argument('--ngpu', type=int, default=1, help='number of GPUs to use')
 parser.add_argument('--netG', default='', help="path to netG (to continue training)")
 parser.add_argument('--netD', default='', help="path to netD (to continue training)")
+parser.add_argument('--disc_per_gen_factor', type=int, default=1, help='number of discriminator iterations every generator iteration')
 parser.add_argument('--manualSeed', type=int, default=1234, help='manual seed')
 parser.add_argument('--continueTraining', action='store_true', help='Continue Training from existing model checkpoint')
 
@@ -61,12 +62,11 @@ opt.cuda = True
 # opt.nef = 128 #Generator
 # opt.imageSize = 128
 # opt.patchSize = 64
-# opt.beforeCropSize = 1024
+# opt.beforeCropSize = 128
 opt.randomCrop = True
+opt.continueTraining = False
 
-CONTINUE_TRAINING = opt.continueTraining
 STEPS_TO_PLOT = 200  # how often to update plots
-N_UPDATE_GEN = 1  # update generator every N discriminator updates
 
 # Path parameters
 if opt.randomCrop:
@@ -82,10 +82,12 @@ PATH_test = "outputs/" + EXP_NAME + "/test_results"
 PATH_plots = "outputs/" + EXP_NAME + "/plots"
 PATH_randomCrops = "outputs/" + EXP_NAME + "/test_results/randomCrops"
 
-if CONTINUE_TRAINING:
+if opt.continueTraining:
     print("Continuing with the training of the existing model in:", "./outputs/" + EXP_NAME)
 
 print(opt)
+
+print("\nStarting Experiment:", EXP_NAME, "\n")
 
 try:
     os.makedirs("outputs")
@@ -191,7 +193,7 @@ resume_epoch = 0
 
 netG = _netG(opt)
 netG.apply(weights_init)
-if opt.netG != '':
+if opt.continueTraining:
     print("Loading model netG from: ", PATH_netG)
     netG.load_state_dict(torch.load(PATH_netG, map_location=lambda storage, location: storage)['state_dict'])
     resume_epoch = torch.load(PATH_netG)['epoch']
@@ -199,7 +201,7 @@ print(netG)
 
 netD = _netlocalD(opt)
 netD.apply(weights_init)
-if opt.netD != '':
+if opt.continueTraining:
     print("Loading model netD from: ", PATH_netD)
     netD.load_state_dict(torch.load(PATH_netD, map_location=lambda storage, location: storage)['state_dict'])
     resume_epoch = torch.load(PATH_netD)['epoch']
@@ -207,7 +209,7 @@ print(netD)
 
 print("\n")
 
-if CONTINUE_TRAINING:
+if opt.continueTraining:
     print("Contuining from resume epoch:", resume_epoch)
 
 criterion = nn.BCELoss()
@@ -249,7 +251,7 @@ D_tots = []
 G_tots = []
 
 # Load measures from initial part of the training, if loading an existing model
-if CONTINUE_TRAINING:
+if opt.continueTraining:
     (D_G_zs, D_xs, Advs, L2s, G_tots, D_tots) = pickle.load(open(PATH_measures, "rb"))
     print("Loaded saved measures with ", len(D_G_zs), "datapoints, approximately ",
           math.ceil(len(D_G_zs) * STEPS_TO_PLOT / len(dataloader)), "epochs")
@@ -330,7 +332,7 @@ for epoch in range(resume_epoch, opt.niter):
         ############################
         # (2) Update G network: maximize log(D(G(z)))
         ###########################
-        if i % N_UPDATE_GEN == 0:  # Step Generator every 10 Discriminator steps
+        if i % opt.disc_per_gen_factor == 0:  # Step Generator every n Discriminator steps
             netG.zero_grad()
             label.data.fill_(real_label)  # fake labels are real for generator cost
             output = netD(fake)
