@@ -4,6 +4,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 import math
+import os
 
 
 # plot losses on a unique figure 'plot.png'
@@ -54,5 +55,36 @@ def plotter(D_G_zs, D_xs, Advs, L2s, G_tots, D_tots, points_per_epoch, PATH_plot
         plt.axvline(x=k, linewidth=0.2, color='k', linestyle='--')
     lgd = plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
     plt.savefig(PATH_plots + "/disc_losses.png", bbox_extra_artists=(lgd,), bbox_inches='tight')
+    
+    return
+
+
+def generate_directories(PATHS, EXP_NAME, is_randomCrop_exp):
+    try:
+        os.makedirs("outputs")
+    except OSError:
+        pass
+    try:
+        os.makedirs("outputs/" + EXP_NAME)
+    except OSError:
+        print("Experiment directory already exists, old content will be overridden!")
+        pass
+    try:
+        os.makedirs(PATHS["plots"])
+    except OSError:
+        pass
+    try:
+        os.makedirs(PATHS["train"])
+    except OSError:
+        pass
+    try:
+        os.makedirs(PATHS["test"])
+    except OSError:
+        pass
+    if is_randomCrop_exp:
+        try:
+            os.makedirs(PATHS["randomCrops"])
+        except OSError:
+            pass
     
     return
