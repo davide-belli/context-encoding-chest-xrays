@@ -5,6 +5,17 @@ import matplotlib.pyplot as plt
 
 import math
 import os
+import numpy as np
+
+# Compute PSNR over images
+def psnr(img1, img2):
+    mse = np.mean((img1 - img2) ** 2)
+    if mse == 0:
+        return 100
+    # PIXEL_MAX = 255
+    PIXEL_MAX = max(np.amax(img1), np.amax(img2))
+    psnr_value = 20 * math.log10(PIXEL_MAX / math.sqrt(mse))
+    return psnr_value
 
 
 # plot losses on a unique figure 'plot.png'
@@ -58,7 +69,9 @@ def plotter(D_G_zs, D_xs, Advs, L2s, G_tots, D_tots, points_per_epoch, PATH_plot
     
     return
 
+   
 
+# Generate directories for an experiment
 def generate_directories(PATHS, EXP_NAME, is_randomCrop_exp):
     try:
         os.makedirs("outputs")

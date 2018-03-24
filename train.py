@@ -17,8 +17,7 @@ import math
 import time
 
 from model import _netjointD, _netlocalD, _netG
-from utils import plotter, generate_directories
-from psnr import psnr
+from utils import plotter, generate_directories, psnr
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--workers', type=int, help='number of data loading workers', default=2)
