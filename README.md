@@ -98,3 +98,33 @@ based on : [context-encoder-pytorch](https://github.com/BoyuanJiang/context_enco
 
   - both context-encoder and discriminator are now created automatically depending on imageSize, patchSize, nef, ndf using the architecture discussed
   - added names and description for every layer to be displayed when the model is created at runtime
+
+  ### Changes in version 24/03/2018
+
+- train.py
+
+  - completed the option to set every parameter as command line argument. In particular new arguments are:
+    - jointD (boolean, no value to be set): run experiment with the jointDiscriminator instead of the normal Local one (see general architecture in: [Globally and Locally Consistent Image Completion](http://hi.cs.waseda.ac.jp/~iizuka/projects/completion/data/completion_sig2017.pdf) )
+    - path_with_margin_size: size of the patch image input to the Local Discriminator including the margins from the original image. Set it = opt.patchSize if you don't want to add margins.
+    - fullyconn_size: size of both output vectors of LocalDisc and GlobalDisc.
+    - freeze_disc: with the new more powerful Discriminator, fake images are detected too easily. You can then set this parameter to freeze the Discriminator training to have it making only 1 step every n iterations
+    - freeze_gen: same possibility is available for Generator, although not needed in this experiment
+    - update_train_img: how often to update plots of reconstruction during the training (deafult: every 100 iterations)
+    - update_measures_plots: how often to plot a new datapoint in the plot measures (default: every 200 iterations)
+    - name: you can now choose a name for the experiment. It will also always be followed by 'randomCrop' and 'jointD' if they are set true, plus the parameters set for imageSize, patchSize, #encoderChannels and #decoderChannels (at the first step)
+    - initialScaleTo: if you want to scale the initial resolution of the image (in the beginning we scaled to 128 pixels and kept the imageSize also = 128 to have the whole image, now we are leaving the default resolution but considering a smaller patch in the central zone)
+  - paths to saving directories are now contained in PATHS dictionary, a notification is displayed if the output directory already exists (and will be overridden)
+
+
+- model.py
+
+  - added netJointD with the following architecture:
+    - LocalDiscriminator: Convolutions as the original Disc. Step IM_SIZE/=2, DEPTHx=2, last layer convolves to a feature layer Nx1x1. Doesn't start from the patch only but adds a margin from the original image (to detect discontinuities), with total input size = opt.patch_with_margin_size
+    - GlobalDiscriminator: Larger kernels (IM_SIZE/=4, DEPTHx=2) starting from the whole reconstructed/real image to a feature layer Nx1x1
+    - JointDiscriminator: the two outputs are concatenated and passed through a fully connected layer going to a scalar and then Sigmoid.
+
+
+- utils.py
+
+  - plotter.py is now renamed utils.py
+  - generate_directories function is now added to utils.py
