@@ -276,7 +276,7 @@ class _netjointD(nn.Module):
 
         main_joint = nn.Sequential()
         
-        main_joint.add_module('DISCjoint_imsize.{0}-{1}.fully_connected'.format(opt.fullyconn_size, 1),
+        main_joint.add_module('DISCjoint_imsize.{0}-{1}.fully_connected'.format(opt.fullyconn_size*2, 1),
             nn.Linear(opt.fullyconn_size * 2, 1, bias=False))
         main_joint.add_module('DISCjoint_imsize.{0}_depth.{1}.final_sigmoid'.format(1, 1),
                               nn.Sigmoid())
@@ -296,7 +296,7 @@ class _netjointD(nn.Module):
         else:
             output_local = self.main_local(input_center)
             output_global = self.main_global(input_real)
-            output_joint = torch.cat((output_global, output_local), dim=1).view(output_local.size(0),output_local.size(1)*2)
+            output_joint = torch.cat((output_global, output_local), dim=1).view(output_local.size(0), output_local.size(1)*2)
             
             # print(output_global.size(), type(output_global))
             # print(output_local.size(), type(output_local))
