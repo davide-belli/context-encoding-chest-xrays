@@ -76,10 +76,11 @@ opt.cuda = True
 # opt.jointD = True
 # opt.randomCrop = True
 # opt.continueTraining = False
-# opt.name = "MARGIN_exp"
+# opt.name = "lunedi"
 # opt.fullyconn_size = 512
 # opt.update_train_img = 50
 # opt.update_measures_plots = 50
+# opt.wtl2 = 0
 
 # Path parameters
 if opt.randomCrop:
@@ -207,6 +208,9 @@ print("\n")
 if opt.continueTraining:
     print("Contuining from resume epoch:", resume_epoch)
 
+paddingLayerWhole = nn.ZeroPad2d((opt.imageSize - opt.patchSize)//2)
+paddingLayerMargin = nn.ZeroPad2d((opt.patch_with_margin_size - opt.patchSize)//2)
+
 criterion = nn.BCELoss()
 criterionMSE = nn.MSELoss()
 
@@ -218,7 +222,6 @@ fake_label = 0
 
 real_center = torch.FloatTensor(opt.batchSize, 1, int(opt.patchSize), int(opt.patchSize))
 real_center_plus_margin = torch.FloatTensor(opt.batchSize, 1, int(opt.patch_with_margin_size), int(opt.patch_with_margin_size))
-fake_center_plus_margin = torch.FloatTensor(opt.batchSize, 1, int(opt.patch_with_margin_size), int(opt.patch_with_margin_size))
 
 
 print("Moving models to CUDA...")
@@ -226,12 +229,13 @@ print("Moving models to CUDA...")
 if opt.cuda:
     netD.cuda()
     netG.cuda()
+    paddingLayerMargin.cuda()
+    paddingLayerWhole.cuda()
     criterion.cuda()
     criterionMSE.cuda()
     input_real, input_cropped, label = input_real.cuda(), input_cropped.cuda(), label.cuda()
     real_center = real_center.cuda()
     real_center_plus_margin = real_center_plus_margin.cuda()
-    fake_center_plus_margin = fake_center_plus_margin.cuda()
 
 input_real = Variable(input_real)
 input_cropped = Variable(input_cropped)
@@ -239,7 +243,6 @@ label = Variable(label)
 
 real_center = Variable(real_center)
 real_center_plus_margin = Variable(real_center_plus_margin)
-fake_center_plus_margin = Variable(fake_center_plus_margin)
 
 # setup optimizer
 optimizerD = optim.Adam(netD.parameters(), lr=opt.lr, betas=(opt.beta1, 0.999))
@@ -314,7 +317,7 @@ for epoch in range(resume_epoch, opt.niter):
         # print(real_center.data.size(), input_real.data.size())
         if opt.jointD:
             if opt.patchSize != opt.patch_with_margin_size:
-                real_center_plus_margin.data.copy_(real_cpu[:, :,
+                real_center_plus_margin.data.resize_(real_cpu.size(0), 1, opt.patch_with_margin_size, opt.patch_with_margin_size).copy_(real_cpu[:, :,
                     int(opt.imageSize / 2 - opt.patch_with_margin_size / 2):int(opt.imageSize / 2 + opt.patch_with_margin_size / 2),
                     int(opt.imageSize / 2 - opt.patch_with_margin_size / 2):int(opt.imageSize / 2 + opt.patch_with_margin_size / 2)])
                 output = netD(real_center_plus_margin, input_real)
@@ -334,28 +337,32 @@ for epoch in range(resume_epoch, opt.niter):
 
         # print(input_cropped.size())
         fake = netG(input_cropped)
+        
+        if opt.jointD:
+            recon_image = paddingLayerWhole(fake)
+            recon_image.data = input_cropped.data
+            recon_image.data[:, :,
+                int(opt.imageSize / 2 - opt.patchSize / 2):int(opt.imageSize / 2 + opt.patchSize / 2),
+                int(opt.imageSize / 2 - opt.patchSize / 2):int(opt.imageSize / 2 + opt.patchSize / 2)] = fake.data
+
+            recon_center_plus_margin = paddingLayerMargin(fake)
+            recon_center_plus_margin.data = recon_image.data[:, :,
+                                                       int(opt.imageSize / 2 - opt.patch_with_margin_size / 2):int(
+                                                           opt.imageSize / 2 + opt.patch_with_margin_size / 2),
+                                                       int(opt.imageSize / 2 - opt.patch_with_margin_size / 2):int(
+                                                           opt.imageSize / 2 + opt.patch_with_margin_size / 2)]
+
         # print(type(fake)) #Variable
         # print(fake.data.size(), " ", input_cropped.data.size())
         label.data.fill_(fake_label)
         if opt.jointD:
-            recon_image = input_cropped.clone()
-            recon_image.data[:, :,
-            int(opt.imageSize / 2 - opt.patchSize / 2):int(opt.imageSize / 2 + opt.patchSize / 2),
-            int(opt.imageSize / 2 - opt.patchSize / 2):int(opt.imageSize / 2 + opt.patchSize / 2)] = fake.data
-
             if opt.patchSize != opt.patch_with_margin_size:
-                fake_center_plus_margin.data.copy_(recon_image.data[:, :,
-                                                   int(opt.imageSize / 2 - opt.patch_with_margin_size / 2):int(
-                                                       opt.imageSize / 2 + opt.patch_with_margin_size / 2),
-                                                   int(opt.imageSize / 2 - opt.patch_with_margin_size / 2):int(
-                                                       opt.imageSize / 2 + opt.patch_with_margin_size / 2)])
-                output = netD(fake_center_plus_margin.detach(), recon_image.detach())
+                output = netD(recon_center_plus_margin.detach(), recon_image.detach())
             else:
                 output = netD(fake.detach(), recon_image.detach())
         else:
             output = netD(fake.detach())
-        # print(output.data.size(), " ", label.data.size())
-        # input("")
+            
         errD_fake = criterion(output, label)
         D_G_z1 = output.data.mean()
         errD = errD_real + errD_fake
@@ -372,7 +379,7 @@ for epoch in range(resume_epoch, opt.niter):
         label.data.fill_(real_label)  # fake labels are real for generator cost
         if opt.jointD:
             if opt.patchSize != opt.patch_with_margin_size:
-                output = netD(fake_center_plus_margin, recon_image)
+                output = netD(recon_center_plus_margin, recon_image)
             else:
                 output = netD(fake, recon_image)
         else:
@@ -442,8 +449,13 @@ for epoch in range(resume_epoch, opt.niter):
                 int(opt.imageSize / 2 - opt.patchSize / 2):int(opt.imageSize / 2 + opt.patchSize / 2)] = fake.data
             save_image(real_cpu, epoch+1, PATHS["train"], "real")
             save_image(recon_image.data, epoch + 1, PATHS["train"], "recon")
-            save_image(fake_center_plus_margin.data, epoch + 1, PATHS["train"], "center_recon")
-            save_image(real_center_plus_margin.data, epoch + 1, PATHS["train"], "center_real")
+            if opt.jointD:
+                save_image(recon_center_plus_margin.data, epoch + 1, PATHS["train"], "center_recon")
+                if opt.patchSize != opt.patch_with_margin_size:
+                    save_image(real_center_plus_margin.data, epoch + 1, PATHS["train"], "center_real")
+                else:
+                    save_image(real_center.data, epoch + 1, PATHS["train"], "center_real")
+                    
     
     
     
@@ -543,7 +555,7 @@ for epoch in range(resume_epoch, opt.niter):
                     save_image(recon_image.data, epoch + 1, PATHS["randomCrops"],
                                str(k) + "_sub_" + str(l)+"recon")
                     save_image(input_rc_cropped.expand(opt.batchSize, -1, -1, -1).data, epoch+1, PATHS["randomCrops"], str(k) + "_batches_" + str(l)+"recon")
-                    save_image( fake.data, epoch + 1, PATHS["randomCrops"], str(k) + "_batches_" + str(l)+"fake")
+                    save_image(fake.data, epoch + 1, PATHS["randomCrops"], str(k) + "_batches_" + str(l)+"fake")
                     
                     image_1024_recon[:, :, int(x + opt.imageSize/2 - opt.patchSize/2):int(x + opt.imageSize/2 + opt.patchSize/2), int(y + opt.imageSize/2 - opt.patchSize/2):int(y + opt.imageSize/2 + opt.patchSize/2)] = fake.data[0].view(-1, 1, opt.patchSize, opt.patchSize)
                 save_image(image_1024, epoch+1, PATHS["randomCrops"], str(k) + "_"+"real")
