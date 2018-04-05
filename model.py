@@ -148,7 +148,7 @@ class _netlocalD(nn.Module):
         main.add_module(
             'DISC_imsize.{0}-{1}_depth.{2}-{3}.conv2d'.format(opt.patchSize, opt.patchSize // 2, opt.nc, opt.nef),
             nn.Conv2d(opt.nc, opt.nef, 4, 2, 1, bias=False))
-        main.add_module('DISC_imsize.{0}_depth.{1}.lrelu'.format(opt.imageSize // 2, opt.nef),
+        main.add_module('DISC_imsize.{0}_depth.{1}.lrelu'.format(opt.patchSize // 2, opt.nef),
                         nn.LeakyReLU(0.2, inplace=True))
         csize, cnef = int(opt.patchSize / 2), opt.nef
         
@@ -167,7 +167,7 @@ class _netlocalD(nn.Module):
         csize = int(csize)
         
         main.add_module('DISC_imsize.{0}-{1}_depth.{2}-{3}.conv2d'.format(csize, 1, cnef, 1),
-                        nn.Conv2d(cnef, 1, 4, 1, 0, bias=False))
+                        nn.Conv2d(cnef, 1, csize, 1, 0, bias=False))
         main.add_module('DISC_imsize.{0}_depth.{1}.final_sigmoid'.format(1, 1),
                         nn.Sigmoid())
         
@@ -201,7 +201,73 @@ class _netlocalD(nn.Module):
             output = self.main(input)
         
         return output.view(-1, 1)
+
+
+class _netmarginD(nn.Module):
+    def __init__(self, opt):
+        super(_netmarginD, self).__init__()
+        self.ngpu = opt.ngpu
+        
+        main = nn.Sequential()
+        
+        main.add_module(
+            'DISC_imsize.{0}-{1}_depth.{2}-{3}.conv2d'.format(opt.patch_with_margin_size, opt.patch_with_margin_size // 2, opt.nc, opt.nef),
+            nn.Conv2d(opt.nc, opt.nef, 4, 2, 1, bias=False))
+        main.add_module('DISC_imsize.{0}_depth.{1}.lrelu'.format(opt.patch_with_margin_size // 2, opt.nef),
+                        nn.LeakyReLU(0.2, inplace=True))
+        csize, cnef = int(opt.patch_with_margin_size / 2), opt.nef
+        
+        while csize > 4:
+            in_feat = cnef
+            out_feat = cnef * 2
+            main.add_module('DISC_imsize.{0}-{1}_depth.{2}-{3}.conv2d'.format(csize, csize // 2, in_feat, out_feat),
+                            nn.Conv2d(in_feat, out_feat, 4, 2, 1, bias=False))
+            main.add_module('DISC_imsize.{0}_depth.{1}.batchnorm'.format(csize // 2, out_feat),
+                            nn.BatchNorm2d(out_feat))
+            main.add_module('DISC_imsize.{0}_depth.{1}.lrelu'.format(csize // 2, out_feat),
+                            nn.LeakyReLU(0.2, inplace=True))
+            cnef = cnef * 2
+            csize = csize // 2
+        
+        csize = int(csize)
+        # print("csize", csize)
+        
+        main.add_module('DISC_imsize.{0}-{1}_depth.{2}-{3}.conv2d'.format(csize, 1, cnef, 1),
+                        nn.Conv2d(cnef, 1, csize, 1, 0, bias=False))
+        main.add_module('DISC_imsize.{0}_depth.{1}.final_sigmoid'.format(1, 1),
+                        nn.Sigmoid())
+        
+        self.main = main
+        
+        # self.main = nn.Sequential(
+        #     # input is (nc) x 64 x 64
+        #     nn.Conv2d(opt.nc, opt.ndf, 4, 2, 1, bias=False),
+        #     nn.LeakyReLU(0.2, inplace=True),
+        #     # state size. (ndf) x 32 x 32
+        #     nn.Conv2d(opt.ndf, opt.ndf * 2, 4, 2, 1, bias=False),
+        #     nn.BatchNorm2d(opt.ndf * 2),
+        #     nn.LeakyReLU(0.2, inplace=True),
+        #     # state size. (ndf*2) x 16 x 16
+        #     nn.Conv2d(opt.ndf * 2, opt.ndf * 4, 4, 2, 1, bias=False),
+        #     nn.BatchNorm2d(opt.ndf * 4),
+        #     nn.LeakyReLU(0.2, inplace=True),
+        #     # state size. (ndf*4) x 8 x 8
+        #     nn.Conv2d(opt.ndf * 4, opt.ndf * 8, 4, 2, 1, bias=False),
+        #     nn.BatchNorm2d(opt.ndf * 8),
+        #     nn.LeakyReLU(0.2, inplace=True),
+        #     # state size. (ndf*8) x 4 x 4
+        #     nn.Conv2d(opt.ndf * 8, 1, 4, 1, 0, bias=False),
+        #     nn.Sigmoid()
+        # )
     
+    def forward(self, input):
+        if isinstance(input.data, torch.cuda.FloatTensor) and self.ngpu > 1:
+            output = nn.parallel.data_parallel(self.main, input, range(self.ngpu))
+        else:
+            output = self.main(input)
+            
+        return output.view(-1, 1)
+
 
 class _netjointD(nn.Module):
     def __init__(self, opt):
@@ -214,9 +280,9 @@ class _netjointD(nn.Module):
         main_local = nn.Sequential()
         
         main_local.add_module(
-            'DISClocal_imsize.{0}-{1}_depth.{2}-{3}.conv2d'.format(opt.patchSize, opt.patchSize // 2, opt.nc, opt.nef),
+            'DISClocal_imsize.{0}-{1}_depth.{2}-{3}.conv2d'.format(opt.patch_with_margin_size, opt.patch_with_margin_size // 2, opt.nc, opt.nef),
             nn.Conv2d(opt.nc, opt.nef, 4, 2, 1, bias=False))
-        main_local.add_module('DISClocal_imsize.{0}_depth.{1}.lrelu'.format(opt.imageSize // 2, opt.nef),
+        main_local.add_module('DISClocal_imsize.{0}_depth.{1}.lrelu'.format(opt.patch_with_margin_size // 2, opt.nef),
                         nn.LeakyReLU(0.2, inplace=True))
         csize, cnef = int(opt.patch_with_margin_size / 2), opt.nef
         
