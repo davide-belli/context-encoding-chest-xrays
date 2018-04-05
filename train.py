@@ -72,7 +72,7 @@ opt.cuda = True
 # opt.imageSize = 128
 # opt.patchSize = 64
 # opt.initialScaleTo = 128
-# opt.patch_with_margin_size = 128 #64
+opt.patch_with_margin_size = 66 # 80
 
 # opt.freeze_gen = 1
 # opt.freeze_disc = 5
@@ -84,7 +84,7 @@ opt.name = "april5th_wtl2-0"  # TODO "venerdi_128_modifiedMarginD"
 opt.fullyconn_size = 512
 opt.update_train_img = 200
 opt.update_measures_plots = 200
-# opt.wtl2 = 0
+opt.wtl2 = 0
 opt.register_hooks = True
 
 
@@ -194,10 +194,10 @@ def save_image(image, epoch, path_to_save, name):
     
 def save_grad(image):
     # print("original")
-    # print(image.data)
-    print("normalized", torch.max(image.data))
-    image.data = image.data/torch.max(image.data)
     print(image.data)
+    print("max value", torch.max(image.data))
+    image.data = image.data/torch.max(image.data)
+    # print(image.data)
     vutils.save_image(image.data,
                       PATHS["train"] + '/epoch_%03d_' % epoch +  str(time.time()) +'.png')
 
@@ -234,8 +234,8 @@ if opt.continueTraining:
 paddingLayerWhole = nn.ZeroPad2d((opt.imageSize - opt.patchSize)//2)
 paddingLayerMargin = nn.ZeroPad2d((opt.patch_with_margin_size - opt.patchSize)//2)
 # paddingLayerMargin_real = nn.ZeroPad2d((opt.patch_with_margin_size - opt.patchSize)//2)
-paddingMargin = ((opt.patch_with_margin_size - opt.patchSize)//2, (opt.patch_with_margin_size - opt.patchSize)//2, (opt.patch_with_margin_size - opt.patchSize)//2, (opt.patch_with_margin_size - opt.patchSize)//2)
-paddingWhole = ((opt.imageSize - opt.patchSize)//2, (opt.imageSize - opt.patchSize)//2, (opt.imageSize - opt.patchSize)//2, (opt.imageSize - opt.patchSize)//2)
+# paddingMargin = ((opt.patch_with_margin_size - opt.patchSize)//2, (opt.patch_with_margin_size - opt.patchSize)//2, (opt.patch_with_margin_size - opt.patchSize)//2, (opt.patch_with_margin_size - opt.patchSize)//2)
+# paddingWhole = ((opt.imageSize - opt.patchSize)//2, (opt.imageSize - opt.patchSize)//2, (opt.imageSize - opt.patchSize)//2, (opt.imageSize - opt.patchSize)//2)
 
 criterion = nn.BCELoss()
 criterionMSE = nn.MSELoss()
@@ -384,6 +384,9 @@ for epoch in range(resume_epoch, opt.niter):
         # print(input_cropped.size())
         fake = netG(input_cropped)
         
+
+        # fake = Variable(torch.randn(64, 1, 64, 64).cuda(), requires_grad=True)
+        
         if opt.jointD or opt.marginD:
             recon_image = paddingLayerWhole(fake)
             # recon_image = F.pad(fake, paddingWhole, 'constant', 0)
@@ -423,6 +426,7 @@ for epoch in range(resume_epoch, opt.niter):
         errD = errD_real + errD_fake
         if i % opt.freeze_disc == 0:
             optimizerD.step()
+            
         
         ############################
         # (2) Update G network: maximize log(D(G(z)))
@@ -438,21 +442,28 @@ for epoch in range(resume_epoch, opt.niter):
                 # output = netD(recon_center_plus_margin, recon_image)
         elif opt.marginD:
             output = netD(recon_center_plus_margin)
+            # output = netD(fake)
         else:
             output = netD(fake)
-            
+
         errG_D = criterion(output, label)
-        
+
         wtl2Matrix = real_center.clone()
         wtl2Matrix.data.fill_(wtl2 * overlapL2Weight)
         wtl2Matrix.data[:, :, int(opt.overlapPred):int(opt.imageSize / 2 - opt.overlapPred),
         int(opt.overlapPred):int(opt.imageSize / 2 - opt.overlapPred)] = wtl2
-        
+
         errG_l2 = (fake - real_center).pow(2)
         errG_l2 = errG_l2 * wtl2Matrix
         errG_l2 = errG_l2.mean()
-        
+
         errG = (1 - wtl2) * errG_D + wtl2 * errG_l2
+        # errG = errG_D
+
+        # z_layer = torch.nn.Conv2d(1, 4, opt.patch_with_margin_size).cuda()
+        # output = z_layer(recon_center_plus_margin)
+        # errG = output.sum()
+        
         
         # print(fake.data[0,0,0])
         # print(recon_center_plus_margin.data[0,0,0])
@@ -465,6 +476,8 @@ for epoch in range(resume_epoch, opt.niter):
             # errG.backward(retain_variables=True)
             # print(paddingLayerMargin.grad)
             errG.backward()
+            # for param in paddingLayerMargin.parameters():
+            #     print(param.grad.data.sum())
             # if i % opt.update_train_img == 0:
             #     print("Gradients")
             #     for param in netG.parameters():
@@ -473,10 +486,14 @@ for epoch in range(resume_epoch, opt.niter):
             D_G_z2 = output.data.mean()
             optimizerG.step()
         
+        # print('[%d/%d][%d/%d] Loss_D: %.4f | Loss_G (Adv/L2->Tot): %.4f / %.4f -> %.4f | p_D(x): %.4f | p_D(G(z)): %.4f'
+        #       % (epoch + 1, opt.niter, i + 1, len(dataloader),
+        #          0, 0 * (1 - wtl2), 0 * wtl2, 0, 0, 0))
+
         print('[%d/%d][%d/%d] Loss_D: %.4f | Loss_G (Adv/L2->Tot): %.4f / %.4f -> %.4f | p_D(x): %.4f | p_D(G(z)): %.4f'
               % (epoch + 1, opt.niter, i + 1, len(dataloader),
                  errD.data[0], errG_D.data[0] * (1 - wtl2), errG_l2.data[0] * wtl2, errG.data[0], D_x, D_G_z1))
-        
+
         this_DGz += D_G_z1
         this_Dx += D_x
         this_Adv += errG_D.data[0]
