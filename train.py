@@ -48,6 +48,7 @@ parser.add_argument('--freeze_gen', type=int, default=1, help='every how many it
 parser.add_argument('--manualSeed', type=int, default=1234, help='manual seed')
 parser.add_argument('--continueTraining', action='store_true', help='Continue Training from existing model checkpoint')
 parser.add_argument('--register_hooks', action='store_true', help='Add Hooks to debug gradients in padding during training')
+parser.add_argument('--inpaintTest', action='store_true', help='Inpaint back test patches on original images when testing')
 
 # parser.add_argument('--nBottleneck', type=int, default=4000, help='of dim for bottleneck of encoder')
 parser.add_argument('--overlapPred', type=int, default=4, help='overlapping edges')
@@ -72,20 +73,23 @@ opt.cuda = True
 # opt.imageSize = 128
 # opt.patchSize = 64
 # opt.initialScaleTo = 128
-opt.patch_with_margin_size = 66 # 80
+# opt.patch_with_margin_size = 66 # 80
 
 # opt.freeze_gen = 1
 # opt.freeze_disc = 5
+# opt.continueTraining = True
 # opt.jointD = True
-opt.marginD = True
-opt.randomCrop = True
-opt.continueTraining = False
-opt.name = "april5th_wtl2-0"  # TODO "venerdi_128_modifiedMarginD"
-opt.fullyconn_size = 512
-opt.update_train_img = 200
-opt.update_measures_plots = 200
-opt.wtl2 = 0
-opt.register_hooks = True
+# opt.marginD = True
+# opt.randomCrop = True
+# opt.name = "TO BE DELETED"
+# opt.fullyconn_size = 512
+# opt.update_train_img = 200
+# opt.update_measures_plots = 200
+# opt.wtl2 = 0
+# opt.register_hooks = True
+
+LIMIT_TRAINING = 1000000
+# LIMIT_TRAINING = 1000
 
 
 # torch.set_printoptions(threshold=5000)
@@ -144,14 +148,21 @@ if opt.randomCrop:
         transforms.Resize(opt.initialScaleTo),
         transforms.ToTensor(),
     ])
-    datasets = []
-    test_datasets = []
+    transform_randomPatches = transforms.Compose([
+        transforms.Grayscale(),
+        transforms.ToTensor(),
+    ])
+    # datasets = []
+    # test_datasets = []
     test_original = []
-    for i in range(opt.N_randomCrop):
-        datasets.append(dset.ImageFolder(root='dataset_lungs/train', transform=transform))
-        test_datasets.append(dset.ImageFolder(root='dataset_lungs/test_64', transform=transform))
-    dataset = torch.utils.data.ConcatDataset(datasets)
-    test_dataset = torch.utils.data.ConcatDataset(test_datasets)
+    # for i in range(opt.N_randomCrop):
+        # datasets.append(dset.ImageFolder(root='dataset_lungs/train', transform=transform))
+        # test_datasets.append(dset.ImageFolder(root='dataset_lungs/test_64', transform=transform))
+    # dataset = torch.utils.data.ConcatDataset(datasets)
+    # test_dataset = torch.utils.data.ConcatDataset(test_datasets)
+    
+    dataset = dset.ImageFolder(root='dataset_lungs/train_randomPatches', transform=transform_randomPatches)
+    test_dataset = dset.ImageFolder(root='dataset_lungs/test_randomPatches', transform=transform_randomPatches)
     
     test_original = dset.ImageFolder(root='dataset_lungs/test_64', transform=transform_original)
     test_original_dataloader = torch.utils.data.DataLoader(test_original, batch_size=opt.batchSize,
@@ -313,239 +324,240 @@ for epoch in range(resume_epoch, opt.niter):
     # Training part for every epoch #
     #################################
     for i, data in enumerate(dataloader, 0):
-        step_counter += 1
-        
-        real_cpu, _ = data
-        real_center_cpu = real_cpu[:, :,
-                          int(opt.imageSize / 2 - opt.patchSize / 2):int(opt.imageSize / 2 + opt.patchSize / 2),
-                          int(opt.imageSize / 2 - opt.patchSize / 2):int(opt.imageSize / 2 + opt.patchSize / 2)]
-        batch_size = real_cpu.size(0)
-        input_real.data.resize_(real_cpu.size()).copy_(real_cpu)
-        input_cropped.data.resize_(real_cpu.size()).copy_(real_cpu)
-        real_center.data.resize_(real_center_cpu.size()).copy_(real_center_cpu)
-        input_cropped.data[:, 0,
-        int(opt.imageSize / 2 - opt.patchSize / 2 + opt.overlapPred):int(
-            opt.imageSize / 2 + opt.patchSize / 2 - opt.overlapPred),
-        int(opt.imageSize / 2 - opt.patchSize / 2 + opt.overlapPred):int(
-            opt.imageSize / 2 + opt.patchSize / 2 - opt.overlapPred)] = 2 * 117.0 / 255.0 - 1.0
-        if opt.nc > 1:
-            input_cropped.data[:, 1,
+        if i < LIMIT_TRAINING:
+            step_counter += 1
+            
+            real_cpu, _ = data
+            real_center_cpu = real_cpu[:, :,
+                              int(opt.imageSize / 2 - opt.patchSize / 2):int(opt.imageSize / 2 + opt.patchSize / 2),
+                              int(opt.imageSize / 2 - opt.patchSize / 2):int(opt.imageSize / 2 + opt.patchSize / 2)]
+            batch_size = real_cpu.size(0)
+            input_real.data.resize_(real_cpu.size()).copy_(real_cpu)
+            input_cropped.data.resize_(real_cpu.size()).copy_(real_cpu)
+            real_center.data.resize_(real_center_cpu.size()).copy_(real_center_cpu)
+            input_cropped.data[:, 0,
             int(opt.imageSize / 2 - opt.patchSize / 2 + opt.overlapPred):int(
                 opt.imageSize / 2 + opt.patchSize / 2 - opt.overlapPred),
             int(opt.imageSize / 2 - opt.patchSize / 2 + opt.overlapPred):int(
-                opt.imageSize / 2 + opt.patchSize / 2 - opt.overlapPred)] = 2 * 104.0 / 255.0 - 1.0
-            input_cropped.data[:, 2,
-            int(opt.imageSize / 2 - opt.patchSize / 2 + opt.overlapPred):int(
-                opt.imageSize / 2 + opt.patchSize / 2 - opt.overlapPred),
-            int(opt.imageSize / 2 - opt.patchSize / 2 + opt.overlapPred):int(
-                opt.imageSize / 2 + opt.patchSize / 2 - opt.overlapPred)] = 2 * 123.0 / 255.0 - 1.0
-        
-        # print(type(input_real), type(input_real.data), type(input_cropped), type(real_cpu), type(real_center_cpu), type(real_center), type(label))
-        # train with real
-        netD.zero_grad()
-        paddingLayerMargin.zero_grad()
-        paddingLayerWhole.zero_grad()
-        label.data.resize_(batch_size, 1).fill_(real_label)
-        
-        # input("Proceed..." + str(real_center.data.size()))
-        
-        # print(real_center.data.size(), input_real.data.size())
-        real_center_plus_margin.data.resize_(real_cpu.size(0), 1, opt.patch_with_margin_size,
-                                             opt.patch_with_margin_size).copy_(real_cpu[:, :,
-                                                                               int(
-                                                                                   opt.imageSize / 2 - opt.patch_with_margin_size / 2):int(
-                                                                                   opt.imageSize / 2 + opt.patch_with_margin_size / 2),
-                                                                               int(
-                                                                                   opt.imageSize / 2 - opt.patch_with_margin_size / 2):int(
-                                                                                   opt.imageSize / 2 + opt.patch_with_margin_size / 2)])
-        
-        if opt.jointD:
-            if opt.patchSize != opt.patch_with_margin_size:
-                output = netD(real_center_plus_margin, input_real)
-            else:
-                # output = netD(real_center, input_real)
-                output = netD(real_center_plus_margin, input_real)
-        elif opt.marginD:
-            output = netD(real_center_plus_margin)
-        else:
-            output = netD(real_center)
+                opt.imageSize / 2 + opt.patchSize / 2 - opt.overlapPred)] = 2 * 117.0 / 255.0 - 1.0
+            if opt.nc > 1:
+                input_cropped.data[:, 1,
+                int(opt.imageSize / 2 - opt.patchSize / 2 + opt.overlapPred):int(
+                    opt.imageSize / 2 + opt.patchSize / 2 - opt.overlapPred),
+                int(opt.imageSize / 2 - opt.patchSize / 2 + opt.overlapPred):int(
+                    opt.imageSize / 2 + opt.patchSize / 2 - opt.overlapPred)] = 2 * 104.0 / 255.0 - 1.0
+                input_cropped.data[:, 2,
+                int(opt.imageSize / 2 - opt.patchSize / 2 + opt.overlapPred):int(
+                    opt.imageSize / 2 + opt.patchSize / 2 - opt.overlapPred),
+                int(opt.imageSize / 2 - opt.patchSize / 2 + opt.overlapPred):int(
+                    opt.imageSize / 2 + opt.patchSize / 2 - opt.overlapPred)] = 2 * 123.0 / 255.0 - 1.0
             
-        # print(real_center_plus_margin.size())
-        # print(output.data.size())
-        # print(label.data.size())
-        # input()
-        errD_real = criterion(output, label)
-        if i % opt.freeze_disc == 0:  # Step Discriminator every freeze_gen iterations
-            errD_real.backward()
-        D_x = output.data.mean()
-        
-        # train with fake
-
-        # print(input_cropped.size())
-        fake = netG(input_cropped)
-        
-
-        # fake = Variable(torch.randn(64, 1, 64, 64).cuda(), requires_grad=True)
-        
-        if opt.jointD or opt.marginD:
-            recon_image = paddingLayerWhole(fake)
-            # recon_image = F.pad(fake, paddingWhole, 'constant', 0)
-            recon_image.data = input_cropped.data
-            recon_image.data[:, :,
-                int(opt.imageSize / 2 - opt.patchSize / 2):int(opt.imageSize / 2 + opt.patchSize / 2),
-                int(opt.imageSize / 2 - opt.patchSize / 2):int(opt.imageSize / 2 + opt.patchSize / 2)] = fake.data
-
-            recon_center_plus_margin = paddingLayerMargin(fake)
-            # recon_center_plus_margin = F.pad(fake, paddingMargin, 'constant', 0)
-            recon_center_plus_margin.data = recon_image.data[:, :,
-                                                       int(opt.imageSize / 2 - opt.patch_with_margin_size / 2):int(
-                                                           opt.imageSize / 2 + opt.patch_with_margin_size / 2),
-                                                       int(opt.imageSize / 2 - opt.patch_with_margin_size / 2):int(
-                                                           opt.imageSize / 2 + opt.patch_with_margin_size / 2)]
-
-        # print(type(fake)) #Variable
-        # print(fake.data.size(), " ", input_cropped.data.size())
-        label.data.fill_(fake_label)
-        if opt.jointD:
-            if opt.patchSize != opt.patch_with_margin_size:
-                recon_center_plus_margin_det = recon_center_plus_margin.detach()
-                recon_image_det = recon_image.detach()
-                output = netD(recon_center_plus_margin_det, recon_image_det)
-            else:
-                output = netD(fake.detach(), recon_image.detach())
-                # output = netD(recon_center_plus_margin.detach(), recon_image.detach())
-        elif opt.marginD:
-            output = netD(recon_center_plus_margin.detach())
-        else:
-            output = netD(fake.detach())
-
-        errD_fake = criterion(output, label)
-        if i % opt.freeze_disc == 0:  # Step Discriminator every freeze_gen iterations
-            errD_fake.backward()
-        D_G_z1 = output.data.mean()
-        errD = errD_real + errD_fake
-        if i % opt.freeze_disc == 0:
-            optimizerD.step()
+            # print(type(input_real), type(input_real.data), type(input_cropped), type(real_cpu), type(real_center_cpu), type(real_center), type(label))
+            # train with real
+            netD.zero_grad()
+            paddingLayerMargin.zero_grad()
+            paddingLayerWhole.zero_grad()
+            label.data.resize_(batch_size, 1).fill_(real_label)
             
-        
-        ############################
-        # (2) Update G network: maximize log(D(G(z)))
-        ###########################
-        
-        netG.zero_grad()
-        label.data.fill_(real_label)  # fake labels are real for generator cost
-        if opt.jointD:
-            if opt.patchSize != opt.patch_with_margin_size:
-                output = netD(recon_center_plus_margin, recon_image)
-            else:
-                output = netD(fake, recon_image)
-                # output = netD(recon_center_plus_margin, recon_image)
-        elif opt.marginD:
-            output = netD(recon_center_plus_margin)
-            # output = netD(fake)
-        else:
-            output = netD(fake)
-
-        errG_D = criterion(output, label)
-
-        wtl2Matrix = real_center.clone()
-        wtl2Matrix.data.fill_(wtl2 * overlapL2Weight)
-        wtl2Matrix.data[:, :, int(opt.overlapPred):int(opt.imageSize / 2 - opt.overlapPred),
-        int(opt.overlapPred):int(opt.imageSize / 2 - opt.overlapPred)] = wtl2
-
-        errG_l2 = (fake - real_center).pow(2)
-        errG_l2 = errG_l2 * wtl2Matrix
-        errG_l2 = errG_l2.mean()
-
-        errG = (1 - wtl2) * errG_D + wtl2 * errG_l2
-        # errG = errG_D
-
-        # z_layer = torch.nn.Conv2d(1, 4, opt.patch_with_margin_size).cuda()
-        # output = z_layer(recon_center_plus_margin)
-        # errG = output.sum()
-        
-        
-        # print(fake.data[0,0,0])
-        # print(recon_center_plus_margin.data[0,0,0])
-        if i % opt.freeze_gen == 0:  # Step Generator every freeze_gen iterations
-            if opt.register_hooks:
-                fake.register_hook(print)
-                recon_center_plus_margin.register_hook(print)
-            # recon_center_plus_margin_det.register_hook(print)
-            # paddingLayerMargin.register_hook(print)
-            # errG.backward(retain_variables=True)
-            # print(paddingLayerMargin.grad)
-            errG.backward()
-            # for param in paddingLayerMargin.parameters():
-            #     print(param.grad.data.sum())
-            # if i % opt.update_train_img == 0:
-            #     print("Gradients")
-            #     for param in netG.parameters():
-            #         print(param.grad.data.sum())
+            # input("Proceed..." + str(real_center.data.size()))
             
-            D_G_z2 = output.data.mean()
-            optimizerG.step()
-        
-        # print('[%d/%d][%d/%d] Loss_D: %.4f | Loss_G (Adv/L2->Tot): %.4f / %.4f -> %.4f | p_D(x): %.4f | p_D(G(z)): %.4f'
-        #       % (epoch + 1, opt.niter, i + 1, len(dataloader),
-        #          0, 0 * (1 - wtl2), 0 * wtl2, 0, 0, 0))
-
-        print('[%d/%d][%d/%d] Loss_D: %.4f | Loss_G (Adv/L2->Tot): %.4f / %.4f -> %.4f | p_D(x): %.4f | p_D(G(z)): %.4f'
-              % (epoch + 1, opt.niter, i + 1, len(dataloader),
-                 errD.data[0], errG_D.data[0] * (1 - wtl2), errG_l2.data[0] * wtl2, errG.data[0], D_x, D_G_z1))
-
-        this_DGz += D_G_z1
-        this_Dx += D_x
-        this_Adv += errG_D.data[0]
-        this_L2 += errG_l2.data[0]
-        this_G_tot += errG.data[0]
-        this_D_tot += errD.data[0]
-        
-        if step_counter == opt.update_measures_plots:
-            this_Adv *= (1 - wtl2)
-            this_L2 *= wtl2
-            this_DGz /= opt.update_measures_plots
-            this_Dx /= opt.update_measures_plots
-            this_Adv /= opt.update_measures_plots
-            this_L2 /= opt.update_measures_plots
-            this_G_tot /= opt.update_measures_plots
-            this_D_tot /= opt.update_measures_plots
+            # print(real_center.data.size(), input_real.data.size())
+            real_center_plus_margin.data.resize_(real_cpu.size(0), 1, opt.patch_with_margin_size,
+                                                 opt.patch_with_margin_size).copy_(real_cpu[:, :,
+                                                                                   int(
+                                                                                       opt.imageSize / 2 - opt.patch_with_margin_size / 2):int(
+                                                                                       opt.imageSize / 2 + opt.patch_with_margin_size / 2),
+                                                                                   int(
+                                                                                       opt.imageSize / 2 - opt.patch_with_margin_size / 2):int(
+                                                                                       opt.imageSize / 2 + opt.patch_with_margin_size / 2)])
             
-            D_G_zs.append(this_DGz)
-            D_xs.append(this_Dx)
-            Advs.append(this_Adv)
-            L2s.append(this_L2)
-            G_tots.append(this_G_tot)
-            D_tots.append(this_D_tot)
-            
-            plotter(D_G_zs, D_xs, Advs, L2s, G_tots, D_tots, (len(dataloader) / opt.update_measures_plots), PATHS["plots"])
-            
-            this_DGz = 0
-            this_Dx = 0
-            this_Adv = 0
-            this_L2 = 0
-            this_G_tot = 0
-            this_D_tot = 0
-            step_counter = 0
-        
-        if i % opt.update_train_img == 0:
-            if not opt.jointD:
-                recon_image = input_cropped.clone()
-                recon_image.data[:, :,
-                int(opt.imageSize / 2 - opt.patchSize / 2):int(opt.imageSize / 2 + opt.patchSize / 2),
-                int(opt.imageSize / 2 - opt.patchSize / 2):int(opt.imageSize / 2 + opt.patchSize / 2)] = fake.data
-            save_image(real_cpu, epoch+1, PATHS["train"], str(i//opt.update_train_img) + "_real")
-            save_image(recon_image.data, epoch + 1, PATHS["train"], str(i//opt.update_train_img) + "_recon")
-            if opt.jointD or opt.marginD:
-                save_image(recon_center_plus_margin.data, epoch + 1, PATHS["train"], str(i//opt.update_train_img) + "_center_recon")
+            if opt.jointD:
                 if opt.patchSize != opt.patch_with_margin_size:
-                    save_image(real_center_plus_margin.data, epoch + 1, PATHS["train"], str(i//opt.update_train_img) + "_center_real")
+                    output = netD(real_center_plus_margin, input_real)
                 else:
-                    save_image(real_center.data, epoch + 1, PATHS["train"], str(i//opt.update_train_img) + "_center_real")
-                    
+                    # output = netD(real_center, input_real)
+                    output = netD(real_center_plus_margin, input_real)
+            elif opt.marginD:
+                output = netD(real_center_plus_margin)
+            else:
+                output = netD(real_center)
+                
+            # print(real_center_plus_margin.size())
+            # print(output.data.size())
+            # print(label.data.size())
+            # input()
+            errD_real = criterion(output, label)
+            if i % opt.freeze_disc == 0:  # Step Discriminator every freeze_gen iterations
+                errD_real.backward()
+            D_x = output.data.mean()
+            
+            # train with fake
     
-        # else:
-        #     break
+            # print(input_cropped.size())
+            fake = netG(input_cropped)
+            
+    
+            # fake = Variable(torch.randn(64, 1, 64, 64).cuda(), requires_grad=True)
+            
+            if opt.jointD or opt.marginD:
+                recon_image = paddingLayerWhole(fake)
+                # recon_image = F.pad(fake, paddingWhole, 'constant', 0)
+                recon_image.data = input_cropped.data
+                recon_image.data[:, :,
+                    int(opt.imageSize / 2 - opt.patchSize / 2):int(opt.imageSize / 2 + opt.patchSize / 2),
+                    int(opt.imageSize / 2 - opt.patchSize / 2):int(opt.imageSize / 2 + opt.patchSize / 2)] = fake.data
+    
+                recon_center_plus_margin = paddingLayerMargin(fake)
+                # recon_center_plus_margin = F.pad(fake, paddingMargin, 'constant', 0)
+                recon_center_plus_margin.data = recon_image.data[:, :,
+                                                           int(opt.imageSize / 2 - opt.patch_with_margin_size / 2):int(
+                                                               opt.imageSize / 2 + opt.patch_with_margin_size / 2),
+                                                           int(opt.imageSize / 2 - opt.patch_with_margin_size / 2):int(
+                                                               opt.imageSize / 2 + opt.patch_with_margin_size / 2)]
+    
+            # print(type(fake)) #Variable
+            # print(fake.data.size(), " ", input_cropped.data.size())
+            label.data.fill_(fake_label)
+            if opt.jointD:
+                if opt.patchSize != opt.patch_with_margin_size:
+                    recon_center_plus_margin_det = recon_center_plus_margin.detach()
+                    recon_image_det = recon_image.detach()
+                    output = netD(recon_center_plus_margin_det, recon_image_det)
+                else:
+                    output = netD(fake.detach(), recon_image.detach())
+                    # output = netD(recon_center_plus_margin.detach(), recon_image.detach())
+            elif opt.marginD:
+                output = netD(recon_center_plus_margin.detach())
+            else:
+                output = netD(fake.detach())
+    
+            errD_fake = criterion(output, label)
+            if i % opt.freeze_disc == 0:  # Step Discriminator every freeze_gen iterations
+                errD_fake.backward()
+            D_G_z1 = output.data.mean()
+            errD = errD_real + errD_fake
+            if i % opt.freeze_disc == 0:
+                optimizerD.step()
+                
+            
+            ############################
+            # (2) Update G network: maximize log(D(G(z)))
+            ###########################
+            
+            netG.zero_grad()
+            label.data.fill_(real_label)  # fake labels are real for generator cost
+            if opt.jointD:
+                if opt.patchSize != opt.patch_with_margin_size:
+                    output = netD(recon_center_plus_margin, recon_image)
+                else:
+                    output = netD(fake, recon_image)
+                    # output = netD(recon_center_plus_margin, recon_image)
+            elif opt.marginD:
+                output = netD(recon_center_plus_margin)
+                # output = netD(fake)
+            else:
+                output = netD(fake)
+    
+            errG_D = criterion(output, label)
+    
+            wtl2Matrix = real_center.clone()
+            wtl2Matrix.data.fill_(wtl2 * overlapL2Weight)
+            wtl2Matrix.data[:, :, int(opt.overlapPred):int(opt.imageSize / 2 - opt.overlapPred),
+            int(opt.overlapPred):int(opt.imageSize / 2 - opt.overlapPred)] = wtl2
+    
+            errG_l2 = (fake - real_center).pow(2)
+            errG_l2 = errG_l2 * wtl2Matrix
+            errG_l2 = errG_l2.mean()
+    
+            errG = (1 - wtl2) * errG_D + wtl2 * errG_l2
+            # errG = errG_D
+    
+            # z_layer = torch.nn.Conv2d(1, 4, opt.patch_with_margin_size).cuda()
+            # output = z_layer(recon_center_plus_margin)
+            # errG = output.sum()
+            
+            
+            # print(fake.data[0,0,0])
+            # print(recon_center_plus_margin.data[0,0,0])
+            if i % opt.freeze_gen == 0:  # Step Generator every freeze_gen iterations
+                if opt.register_hooks:
+                    fake.register_hook(print)
+                    recon_center_plus_margin.register_hook(print)
+                # recon_center_plus_margin_det.register_hook(print)
+                # paddingLayerMargin.register_hook(print)
+                # errG.backward(retain_variables=True)
+                # print(paddingLayerMargin.grad)
+                errG.backward()
+                # for param in paddingLayerMargin.parameters():
+                #     print(param.grad.data.sum())
+                # if i % opt.update_train_img == 0:
+                #     print("Gradients")
+                #     for param in netG.parameters():
+                #         print(param.grad.data.sum())
+                
+                D_G_z2 = output.data.mean()
+                optimizerG.step()
+            
+            # print('[%d/%d][%d/%d] Loss_D: %.4f | Loss_G (Adv/L2->Tot): %.4f / %.4f -> %.4f | p_D(x): %.4f | p_D(G(z)): %.4f'
+            #       % (epoch + 1, opt.niter, i + 1, len(dataloader),
+            #          0, 0 * (1 - wtl2), 0 * wtl2, 0, 0, 0))
+    
+            print('[%d/%d][%d/%d] Loss_D: %.4f | Loss_G (Adv/L2->Tot): %.4f / %.4f -> %.4f | p_D(x): %.4f | p_D(G(z)): %.4f'
+                  % (epoch + 1, opt.niter, i + 1, len(dataloader),
+                     errD.data[0], errG_D.data[0] * (1 - wtl2), errG_l2.data[0] * wtl2, errG.data[0], D_x, D_G_z1))
+    
+            this_DGz += D_G_z1
+            this_Dx += D_x
+            this_Adv += errG_D.data[0]
+            this_L2 += errG_l2.data[0]
+            this_G_tot += errG.data[0]
+            this_D_tot += errD.data[0]
+            
+            if step_counter == opt.update_measures_plots:
+                this_Adv *= (1 - wtl2)
+                this_L2 *= wtl2
+                this_DGz /= opt.update_measures_plots
+                this_Dx /= opt.update_measures_plots
+                this_Adv /= opt.update_measures_plots
+                this_L2 /= opt.update_measures_plots
+                this_G_tot /= opt.update_measures_plots
+                this_D_tot /= opt.update_measures_plots
+                
+                D_G_zs.append(this_DGz)
+                D_xs.append(this_Dx)
+                Advs.append(this_Adv)
+                L2s.append(this_L2)
+                G_tots.append(this_G_tot)
+                D_tots.append(this_D_tot)
+                
+                plotter(D_G_zs, D_xs, Advs, L2s, G_tots, D_tots, (len(dataloader) / opt.update_measures_plots), PATHS["plots"])
+                
+                this_DGz = 0
+                this_Dx = 0
+                this_Adv = 0
+                this_L2 = 0
+                this_G_tot = 0
+                this_D_tot = 0
+                step_counter = 0
+            
+            if i % opt.update_train_img == 0:
+                if not opt.jointD:
+                    recon_image = input_cropped.clone()
+                    recon_image.data[:, :,
+                    int(opt.imageSize / 2 - opt.patchSize / 2):int(opt.imageSize / 2 + opt.patchSize / 2),
+                    int(opt.imageSize / 2 - opt.patchSize / 2):int(opt.imageSize / 2 + opt.patchSize / 2)] = fake.data
+                save_image(real_cpu, epoch+1, PATHS["train"], str(i//opt.update_train_img) + "_real")
+                save_image(recon_image.data, epoch + 1, PATHS["train"], str(i//opt.update_train_img) + "_recon")
+                if opt.jointD or opt.marginD:
+                    save_image(recon_center_plus_margin.data, epoch + 1, PATHS["train"], str(i//opt.update_train_img) + "_center_recon")
+                    if opt.patchSize != opt.patch_with_margin_size:
+                        save_image(real_center_plus_margin.data, epoch + 1, PATHS["train"], str(i//opt.update_train_img) + "_center_real")
+                    else:
+                        save_image(real_center.data, epoch + 1, PATHS["train"], str(i//opt.update_train_img) + "_center_real")
+                        
+        
+        else:
+            break
     
     
     
@@ -561,6 +573,9 @@ for epoch in range(resume_epoch, opt.niter):
     with open(PATHS["test"] + "/PSNRs.txt", "a") as myfile:
         myfile.write("\nEPOCH " + str(epoch))
         
+    tot_psnr_patch = []
+    tot_psnr_image = []
+    
     for i, data in enumerate(test_dataloader, 0):
         real_cpu, _ = data
         real_center_cpu = real_cpu[:, :, int(opt.imageSize / 4):int(opt.imageSize / 4) + int(opt.imageSize / 2),
@@ -604,17 +619,28 @@ for epoch in range(resume_epoch, opt.niter):
             p += psnr(real_center_np[j].transpose(1, 2, 0), fake_np[j].transpose(1, 2, 0))
             total_p += psnr(real_cpu_np[j].transpose(1, 2, 0), recon_image_np[j].transpose(1, 2, 0))
         
+        tot_psnr_image.append(total_p/opt.batchSize)
+        tot_psnr_patch.append(p/opt.batchSize)
+        
         print('[%d/%d] PSNR per Patch: %.4f | PSNR per Image: %.4f'
               % (i + 1, len(test_dataloader), p / opt.batchSize, total_p / opt.batchSize))
 
-        with open(PATHS["test"] + "/PSNRs.txt", "a") as myfile:
-            myfile.write('\n\t[%d/%d] PSNR per Patch: %.4f | PSNR per Image: %.4f'
-              % (i + 1, len(test_dataloader), p / opt.batchSize, total_p / opt.batchSize))
+        # with open(PATHS["test"] + "/PSNRs.txt", "a") as myfile:
+        #     myfile.write('\n\t[%d/%d] PSNR per Patch: %.4f | PSNR per Image: %.4f'
+        #       % (i + 1, len(test_dataloader), p / opt.batchSize, total_p / opt.batchSize))
         
-        save_image(real_cpu, epoch+1, PATHS["test"], "_"+str(i)+"real")
-        save_image(recon_image.data, epoch + 1, PATHS["test"], "_"+str(i)+"recon")
+        if i <= 1:
+            save_image(real_cpu, epoch+1, PATHS["test"], "_"+str(i)+"real")
+            save_image(recon_image.data, epoch + 1, PATHS["test"], "_"+str(i)+"recon")
+
+    print('EPOCH [%d] AVERAGES: PSNR per Patch: %.4f | PSNR per Image: %.4f'
+          % (epoch, sum(tot_psnr_patch) / len(tot_psnr_patch), sum(tot_psnr_image) / len(tot_psnr_image)))
+    
+    with open(PATHS["test"] + "/PSNRs.txt", "a") as myfile:
+        myfile.write('\nEPOCH [%d] AVERAGES: PSNR per Patch: %.4f | PSNR per Image: %.4f'
+                     % (epoch, sum(tot_psnr_patch)/len(tot_psnr_patch), sum(tot_psnr_image)/len(tot_psnr_image)))
         
-    if opt.randomCrop:
+    if opt.randomCrop and opt.inpaintTest:
         MIN = (opt.initialScaleTo - opt.CENTER_SIZE_randomCrop) // 2
         MAX = (opt.initialScaleTo + opt.CENTER_SIZE_randomCrop) // 2 - opt.imageSize
         
