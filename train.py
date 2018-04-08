@@ -39,7 +39,7 @@ parser.add_argument('--lr', type=float, default=0.0002, help='learning rate, def
 parser.add_argument('--beta1', type=float, default=0.5, help='beta1 for adam. default=0.5')
 parser.add_argument('--cuda', action='store_true', help='enables cuda')
 parser.add_argument('--ngpu', type=int, default=1, help='number of GPUs to use')
-parser.add_argument('--update_train_img', type=int, default=100, help='how often (iterations) to update training set images')
+parser.add_argument('--update_train_img', type=int, default=10000, help='how often (iterations) to update training set images')
 parser.add_argument('--update_measures_plots', type=int, default=200, help='how often (iterations) to add a new datapoint in measure plots')
 parser.add_argument('--netG', default='', help="path to netG (to continue training)")
 parser.add_argument('--netD', default='', help="path to netD (to continue training)")
@@ -84,7 +84,6 @@ opt.cuda = True
 # opt.name = "TO BE DELETED"
 # opt.fullyconn_size = 512
 # opt.update_train_img = 200
-# opt.update_measures_plots = 200
 # opt.wtl2 = 0
 # opt.register_hooks = True
 
@@ -153,16 +152,16 @@ if opt.randomCrop:
         transforms.ToTensor(),
     ])
     # datasets = []
-    # test_datasets = []
+    test_datasets = []
     test_original = []
-    # for i in range(opt.N_randomCrop):
+    for i in range(opt.N_randomCrop):
         # datasets.append(dset.ImageFolder(root='dataset_lungs/train', transform=transform))
-        # test_datasets.append(dset.ImageFolder(root='dataset_lungs/test_64', transform=transform))
+        test_datasets.append(dset.ImageFolder(root='dataset_lungs/test_64', transform=transform))
     # dataset = torch.utils.data.ConcatDataset(datasets)
-    # test_dataset = torch.utils.data.ConcatDataset(test_datasets)
+    test_dataset = torch.utils.data.ConcatDataset(test_datasets)
     
     dataset = dset.ImageFolder(root='dataset_lungs/train_randomPatches', transform=transform_randomPatches)
-    test_dataset = dset.ImageFolder(root='dataset_lungs/test_randomPatches', transform=transform_randomPatches)
+    # test_dataset = dset.ImageFolder(root='dataset_lungs/test_randomPatches', transform=transform_randomPatches)
     
     test_original = dset.ImageFolder(root='dataset_lungs/test_64', transform=transform_original)
     test_original_dataloader = torch.utils.data.DataLoader(test_original, batch_size=opt.batchSize,
