@@ -64,6 +64,7 @@ parser.add_argument('--jointD', action='store_true', help='Discriminator joins L
 parser.add_argument('--fullyconn_size', type=int, default=1024, help='Size of the output of Local and Global Discriminator which will be joint in fully conntected layer')
 parser.add_argument('--patch_with_margin_size', type=int, default=80, help='the size of image with margin to extend the reconstructed center to be input in Local Discriminator')
 parser.add_argument('--marginD', action='store_true', help='Discriminator with margins')
+parser.add_argument('--freezeTraining', action='store_true', help='2 Epochs Gen, 5 Epochs Disc, then combined')
 
 opt = parser.parse_args()
 opt.cuda = True
@@ -86,6 +87,7 @@ opt.cuda = True
 # opt.update_train_img = 200
 # opt.wtl2 = 0
 # opt.register_hooks = True
+# opt.freezeTraining = True
 
 LIMIT_TRAINING = 1000000
 # LIMIT_TRAINING = 1000
@@ -386,7 +388,8 @@ for epoch in range(resume_epoch, opt.niter):
             # print(label.data.size())
             # input()
             errD_real = criterion(output, label)
-            if i % opt.freeze_disc == 0:  # Step Discriminator every freeze_gen iterations
+            # if i % opt.freeze_disc == 0:  # Step Discriminator every freeze_gen iterations
+            if not opt.freezeTraining or epoch >= 2:
                 errD_real.backward()
             D_x = output.data.mean()
             
@@ -431,11 +434,13 @@ for epoch in range(resume_epoch, opt.niter):
                 output = netD(fake.detach())
     
             errD_fake = criterion(output, label)
-            if i % opt.freeze_disc == 0:  # Step Discriminator every freeze_gen iterations
+            # if i % opt.freeze_disc == 0:  # Step Discriminator every freeze_gen iterations
+            if not opt.freezeTraining or epoch >= 2:
                 errD_fake.backward()
             D_G_z1 = output.data.mean()
             errD = errD_real + errD_fake
-            if i % opt.freeze_disc == 0:
+            # if i % opt.freeze_disc == 0:
+            if not opt.freezeTraining or epoch >= 2:
                 optimizerD.step()
                 
             
@@ -467,8 +472,10 @@ for epoch in range(resume_epoch, opt.niter):
             errG_l2 = (fake - real_center).pow(2)
             errG_l2 = errG_l2 * wtl2Matrix
             errG_l2 = errG_l2.mean()
-    
-            errG = (1 - wtl2) * errG_D + wtl2 * errG_l2
+            if opt.freezeTraining and epoch < 2:
+                errG = errG_l2
+            if not opt.freezeTraining or epoch > 6:
+                errG = (1 - wtl2) * errG_D + wtl2 * errG_l2
             # errG = errG_D
     
             # z_layer = torch.nn.Conv2d(1, 4, opt.patch_with_margin_size).cuda()
@@ -478,7 +485,8 @@ for epoch in range(resume_epoch, opt.niter):
             
             # print(fake.data[0,0,0])
             # print(recon_center_plus_margin.data[0,0,0])
-            if i % opt.freeze_gen == 0:  # Step Generator every freeze_gen iterations
+            # if i % opt.freeze_gen == 0:  # Step Generator every freeze_gen iterations
+            if not opt.freezeTraining or epoch < 2 or epoch > 6:
                 if opt.register_hooks:
                     fake.register_hook(print)
                     recon_center_plus_margin.register_hook(print)
