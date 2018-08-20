@@ -115,7 +115,7 @@ print("\nStarting Experiment:", EXP_NAME, "\n")
 
 opt.output += EXP_NAME + "/"
 
-TEST_HEALTHY = "dataset_lungs/healthy880patch/"
+TEST_HEALTHY = "dataset_lungs/healthy880patch"
 TEST_UNHEALTHY = "dataset_lungs/unhealthy880patch"
 TEST_PATCHES = "dataset_lungs/patches"
 BASE_HEALTHY = "healthy880patch/"

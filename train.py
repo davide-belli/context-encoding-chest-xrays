@@ -81,16 +81,16 @@ opt.cuda = True
 # opt.continueTraining = True
 # opt.jointD = True
 # opt.marginD = True
-# opt.randomCrop = True
-# opt.name = "TO BE DELETED"
-# opt.fullyconn_size = 512
+opt.randomCrop = True
+opt.name = "TO BE DELETED"
+opt.fullyconn_size = 512
 # opt.update_train_img = 200
 # opt.wtl2 = 0
 # opt.register_hooks = True
 # opt.freezeTraining = True
 
-LIMIT_TRAINING = 1000000
-# LIMIT_TRAINING = 1000
+# LIMIT_TRAINING = 1000000
+LIMIT_TRAINING = 200
 
 
 # torch.set_printoptions(threshold=5000)
