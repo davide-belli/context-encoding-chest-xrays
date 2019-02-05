@@ -12,3 +12,11 @@ lungs.*
 *.pickle
 *.pyc
 log.txt
+
+compute_psnr.m
+fix_plot.ipynb
+model_exp1.py
+randomCrop_generator (copy).ipynb
+randomCrop_generator.ipynb
+test_padding_gradient.py
+train_RandomCrop.py
