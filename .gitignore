@@ -11,3 +11,4 @@ old*.py
 lungs.*
 *.pickle
 *.pyc
+log.txt
