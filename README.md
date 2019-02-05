@@ -6,14 +6,24 @@ Work based on [context-encoder-pytorch](https://github.com/BoyuanJiang/context_e
 
 ### Images
 
-<img src="./images/example.png" width="200" align="middle">
+<p align="center">
+	<img src="./images/example.png" width="600" align="middle">
 
 __Figure 1__: Sample image from ChestX-ray14 dataset
 
 
-<img src="./images/example.png" width="200" align="middle">
+#### Final reconstructions of inpainted chest images
 
-__Figure 1__: Sample image from ChestX-ray14 dataset
+<img src="./images/whole-final-a.png" width="400" align="middle"> <img src="./images/whole-final-b.png" width="400" align="middle">
+
+
+#### High resolution inpainting of smaller patches
+
+Healthy patches             |  Unhealthy patches
+:-------------------------:|:-------------------------:
+<img src="./images/healthy-diff.png" width="400" align="middle"> | <img src="./images/unhealthy-diff.png" width="400" align="middle">
+
+</p>
 
 
 
