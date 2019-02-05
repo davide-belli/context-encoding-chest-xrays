@@ -24,9 +24,7 @@ __Figure 1__: Sample image from ChestX-ray14 dataset
 #### High resolution inpainting of smaller patches
 
 <p align="center">
-	Healthy patches             |  Unhealthy patches
-	:-------------------------:|:-------------------------:
-	<img src="./images/healthy-diff.png" width="400" align="middle"> | <img src="./images/unhealthy-diff.png" width="400" align="middle">
+	<img src="./images/healthy-diff.png" width="400" align="middle">  <img src="./images/unhealthy-diff.png" width="400" align="middle">
 </p>
 
 
