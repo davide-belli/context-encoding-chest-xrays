@@ -6,8 +6,14 @@ Work based on [context-encoder-pytorch](https://github.com/BoyuanJiang/context_e
 
 ### Images
 
-<img src="./images/example.png" width="200">
-**Figure 1**: Sample image from ChestX-ray14 dataset
+<img src="./images/example.png" width="200" align="middle">
+
+__Figure 1__: Sample image from ChestX-ray14 dataset
+
+
+<img src="./images/example.png" width="200" align="middle">
+
+__Figure 1__: Sample image from ChestX-ray14 dataset
 
 
 
